@@ -1,0 +1,106 @@
+package main
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/EHLO1/n8n-orchestrator/internal/config"
+)
+
+func baseSnap() Snapshot {
+	return Snapshot{
+		Vrrp:              VrrpBackup,
+		LocalPg:           PgReplica,
+		LocalValkey:       ValkeyReplica,
+		ValkeyMasterHost:  "10.0.0.1",
+		PeerWgReachable:   true,
+		PeerPhysReachable: true,
+		PeerPgRole:        PgPrimary,
+		PeerValkeyRole:    ValkeyMaster,
+		WgHandshakeAge:    5,
+		LBReachable:       true,
+		Maintenance:       false,
+	}
+}
+
+func testCfg() *config.Config {
+	return &config.Config{
+		PeerWGIP:           "10.0.0.1",
+		ValkeyPeerPort:     6379,
+		PeerDownHysteresis: 3,
+	}
+}
+
+func TestMaintenanceHoldsState(t *testing.T) {
+	s := baseSnap()
+	s.Maintenance = true
+	d := computeDesiredState(testCfg(), s, 0)
+	if d.StateFile != "" {
+		t.Errorf("expected empty state file, got %q", d.StateFile)
+	}
+	if !strings.Contains(d.Rationale, "maintenance") {
+		t.Errorf("rationale: %s", d.Rationale)
+	}
+}
+
+func TestMasterWithPeerDownPromotes(t *testing.T) {
+	s := baseSnap()
+	s.Vrrp = VrrpMaster
+	s.PeerWgReachable = false
+	s.PeerPhysReachable = false
+	d := computeDesiredState(testCfg(), s, 3)
+	if d.Pg != PgPrimary || d.Valkey != ValkeyMaster {
+		t.Errorf("expected primary/master, got %s/%s", d.Pg, d.Valkey)
+	}
+	if d.StateFile != "primary" {
+		t.Errorf("expected primary, got %q", d.StateFile)
+	}
+}
+
+func TestSplitBrainRiskHolds(t *testing.T) {
+	s := baseSnap()
+	s.Vrrp = VrrpMaster
+	s.PeerWgReachable = false
+	s.PeerPhysReachable = true
+	d := computeDesiredState(testCfg(), s, 0)
+	if d.StateFile != "" {
+		t.Errorf("expected empty state file under split-brain risk")
+	}
+	if !strings.Contains(d.Rationale, "split-brain") {
+		t.Errorf("rationale: %s", d.Rationale)
+	}
+}
+
+func TestMasterWithoutLBHoldsStateFile(t *testing.T) {
+	s := baseSnap()
+	s.Vrrp = VrrpMaster
+	s.PeerWgReachable = false
+	s.PeerPhysReachable = false
+	s.LBReachable = false
+	d := computeDesiredState(testCfg(), s, 3)
+	if d.Pg != PgPrimary {
+		t.Errorf("should still promote locally")
+	}
+	if d.StateFile != "" {
+		t.Errorf("should not advertise primary without LB reachability")
+	}
+}
+
+func TestBackupWithPeerReachableFollows(t *testing.T) {
+	d := computeDesiredState(testCfg(), baseSnap(), 0)
+	if d.Pg != PgReplica || d.Valkey != ValkeyReplica {
+		t.Errorf("expected replica/replica")
+	}
+	if d.ValkeyReplicateOf == nil {
+		t.Errorf("expected replicate target")
+	}
+}
+
+func TestFaultTakesNoAction(t *testing.T) {
+	s := baseSnap()
+	s.Vrrp = VrrpFault
+	d := computeDesiredState(testCfg(), s, 0)
+	if d.StateFile != "" {
+		t.Errorf("expected no state file changes in FAULT")
+	}
+}

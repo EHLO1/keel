@@ -1,8 +1,8 @@
-// Package probe contains the reachability probes Keel uses to build
+// Package services contains reachability probes Keel uses to build
 // each tick's snapshot of reality. Each probe type lives in its own
 // file: http.go (this file) for HTTP health checks, icmp.go for
 // data-plane liveness over wg0, and so on.
-package probe
+package services
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 //
 // Construct one with NewHTTP, share it across the prober's lifetime, and
 // call Check() per endpoint per tick.
-type HTTPProbe struct {
+type HTTPProbeService struct {
 	cfg    *config.Config
 	client *http.Client
 }
@@ -31,7 +31,7 @@ type HTTPProbe struct {
 // The client uses cfg.ProbeTimeout for both connect and total-request
 // budget. Per-call deadlines via context.Context override this when
 // stricter timing is needed.
-func NewHTTP(cfg *config.Config) *HTTPProbe {
+func NewHTTP(cfg *config.Config) *HTTPProbeService {
 	transport := &http.Transport{
 		// Small pool — we hit two endpoints, both internal.
 		MaxIdleConns:        4,
@@ -46,7 +46,7 @@ func NewHTTP(cfg *config.Config) *HTTPProbe {
 		// state is easier to reason about during failures.
 		ForceAttemptHTTP2: false,
 	}
-	return &HTTPProbe{
+	return &HTTPProbeService{
 		cfg: cfg,
 		client: &http.Client{
 			Timeout:   cfg.ProbeTimeout,
@@ -69,7 +69,7 @@ type Result struct {
 // Check performs one GET against url, returning OK only on a 2xx response.
 // Honors ctx cancellation and the configured probe timeout, whichever is
 // stricter.
-func (p *HTTPProbe) Check(ctx context.Context, url string) Result {
+func (p *HTTPProbeService) Check(ctx context.Context, url string) Result {
 	start := time.Now()
 	r := Result{URL: url}
 
@@ -102,7 +102,7 @@ func (p *HTTPProbe) Check(ctx context.Context, url string) Result {
 
 // Close releases connections held by the underlying transport. Call
 // during graceful shutdown. Safe to call multiple times.
-func (p *HTTPProbe) Close() {
+func (p *HTTPProbeService) Close() {
 	if t, ok := p.client.Transport.(*http.Transport); ok {
 		t.CloseIdleConnections()
 	}

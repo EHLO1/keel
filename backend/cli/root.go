@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/EHLO1/keel/backend/internal/bootstrap"
-	"github.com/EHLO1/keel/backend/pkg/utils/signals"
+	"github.com/EHLO1/keel/backend/internal/signals"
 )
 
 var rootCmd = &cobra.Command{

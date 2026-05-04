@@ -67,10 +67,3 @@ func startServer(appCtx context.Context, server *http.Server) error {
 
 	return nil
 }
-
-func newConfiguredHTTPClient(cfg *config.Config) *http.Client {
-	if cfg.HTTPClientTimeout > 0 {
-		return httputils.NewHTTPClientWithTimeout(time.Duration(cfg.HTTPClientTimeout) * time.Second)
-	}
-	return httputils.NewHTTPClient()
-}

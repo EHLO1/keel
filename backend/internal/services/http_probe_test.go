@@ -1,4 +1,4 @@
-package probe
+package services
 
 import (
 	"context"
@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"keel/internal/config"
+	"github.com/EHLO1/keel/backend/internal/config"
 )
 
-func newTestProbe() *HTTPProbe {
+func newTestProbe() *HTTPProbeService {
 	return NewHTTP(&config.Config{ProbeTimeout: 2 * time.Second})
 }
 

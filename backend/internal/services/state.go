@@ -1,5 +1,4 @@
-// internal/state/state.go
-package state
+package services
 
 import (
 	"context"
@@ -30,7 +29,7 @@ type Snapshot struct {
 }
 
 // State holds the current view and the probes used to refresh it.
-type State struct {
+type StateService struct {
 	cfg    *config.Config
 	http   *probe.HTTPProbe
 	pg     *probe.PostgresProbe
@@ -43,9 +42,9 @@ type State struct {
 	current atomic.Pointer[Snapshot]
 }
 
-func New(cfg *config.Config, h *probe.HTTPProbe, pg *probe.PostgresProbe,
-	v *probe.ValkeyProbe, wg *probe.WireGuardProbe, ic *probe.ICMPProbe) *State {
-	s := &State{cfg: cfg, http: h, pg: pg, valkey: v, wg: wg, icmp: ic}
+func NewStateService(cfg *config.Config, h *probe.HTTPProbe, pg *probe.PostgresProbe,
+	v *probe.ValkeyProbe, wg *probe.WireGuardProbe, ic *probe.ICMPProbe) *StateService {
+	s := &StateService{cfg: cfg, http: h, pg: pg, valkey: v, wg: wg, icmp: ic}
 	empty := &Snapshot{}
 	s.current.Store(empty)
 	return s
@@ -54,7 +53,7 @@ func New(cfg *config.Config, h *probe.HTTPProbe, pg *probe.PostgresProbe,
 // Refresh runs all probes concurrently and atomically updates current.
 // Called once per reconciler tick; the goroutine fan-out is the same
 // pattern from collectSnapshot.
-func (s *State) Refresh(ctx context.Context) *Snapshot {
+func (s *StateService) Refresh(ctx context.Context) *Snapshot {
 	var (
 		wg   sync.WaitGroup
 		snap = &Snapshot{CapturedAt: time.Now()}
@@ -80,6 +79,6 @@ func (s *State) Refresh(ctx context.Context) *Snapshot {
 }
 
 // Current returns the most recently refreshed snapshot. Lock-free read.
-func (s *State) Current() *Snapshot {
+func (s *StateService) Current() *Snapshot {
 	return s.current.Load()
 }

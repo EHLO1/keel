@@ -20,12 +20,7 @@ func Bootstrap(ctx context.Context) error {
 	_ = godotenv.Load()
 	cfg := config.Load()
 
-	slog.InfoContext(ctx, "Keel is starting")
-
-	// server := &http.Server{
-	// 	Addr:    cfg.ListenAddr(),
-	// 	Handler: router(),
-	// }
+	slog.InfoContext(ctx, "Keel is starting...")
 
 	appCtx, cancelApp := context.WithCancel(ctx)
 	defer cancelApp()
@@ -71,4 +66,11 @@ func startServer(appCtx context.Context, server *http.Server) error {
 	slog.InfoContext(shutdownCtx, "Server stopped gracefully") //nolint:contextcheck
 
 	return nil
+}
+
+func newConfiguredHTTPClient(cfg *config.Config) *http.Client {
+	if cfg.HTTPClientTimeout > 0 {
+		return httputils.NewHTTPClientWithTimeout(time.Duration(cfg.HTTPClientTimeout) * time.Second)
+	}
+	return httputils.NewHTTPClient()
 }

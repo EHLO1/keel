@@ -13,7 +13,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:          "keel",
-	Long:         "Keel - 2-Node Backend Orchestrator.",
+	Long:         "Keel - Backend Orchestrator for 2+ Nodes.",
 	SilenceUsage: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		err := bootstrap.Bootstrap(cmd.Context())

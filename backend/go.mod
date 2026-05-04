@@ -5,6 +5,7 @@ go 1.26.1
 require (
 	github.com/EHLO1/n8n-orchestrator v0.0.0-20260501205339-0a77114e2b83
 	github.com/jackc/pgx/v5 v5.9.2
+	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.19.0
 	github.com/spf13/cobra v1.10.2
 )

@@ -11,7 +11,6 @@
 package config
 
 import (
-	"bufio"
 	"fmt"
 	"log/slog"
 	"os"
@@ -82,158 +81,49 @@ type Config struct {
 	LogJSON  bool   `env:"LOG_JSON" default:"true"`
 }
 
-// Load reads the optional .env file at envFilePath (empty = skip), overlays
-// real environment variables on top, and resolves the result into a Config.
-// Returns an error if required fields are missing or malformed.
-func Load(envFilePath string) (*Config, error) {
-	if envFilePath != "" {
-		if err := loadEnvFile(envFilePath); err != nil {
-			// Missing file is fine; malformed file is not.
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("read env file %s: %w", envFilePath, err)
-			}
-			slog.Debug("env file not present, using environment + defaults",
-				"path", envFilePath)
-		}
-	}
-
+func Load() *Config {
 	cfg := &Config{}
 	loadFromEnv(cfg)
 	applyOptions(cfg)
 
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-	return cfg, nil
+	return cfg
 }
 
-// Validate ensures required fields are present and ranges are sensible.
-func (c *Config) Validate() error {
-	if c.PeerWGIP == "" {
-		return fmt.Errorf("PEER_WG_IP is required")
-	}
-	if c.PeerPhysIP == "" {
-		return fmt.Errorf("PEER_PHYS_IP is required")
-	}
-	if c.LBHealthURL == "" {
-		return fmt.Errorf("LB_HEALTH_URL is required")
-	}
-	if c.TickInterval <= 0 {
-		return fmt.Errorf("TICK_INTERVAL must be positive")
-	}
-	if c.PeerDownHysteresis < 1 {
-		return fmt.Errorf("PEER_DOWN_HYSTERESIS must be >= 1")
-	}
-	return nil
-}
-
-// PeerQueueHealthURL is the full URL of the peer's queue-health endpoint.
-func (c *Config) PeerQueueHealthURL() string {
-	return fmt.Sprintf("http://%s:%d%s",
-		c.PeerPhysIP, c.PeerQueueHealthPort, c.PeerQueueHealthPath)
-}
-
-// PGPeerDSN renders the peer DSN with the current peer wg0 IP.
-func (c *Config) PGPeerDSN() string {
-	return fmt.Sprintf(c.PGPeerDSNTemplate, c.PeerWGIP)
-}
-
-// ValkeyPeerAddr is the host:port form of the peer Valkey server.
-func (c *Config) ValkeyPeerAddr() string {
-	return fmt.Sprintf("%s:%d", c.PeerWGIP, c.ValkeyPeerPort)
-}
-
-// MaskSensitive returns a copy of the config with sensitive fields redacted.
-// Fields tagged with options:"file" are considered sensitive.
-func (c *Config) MaskSensitive() map[string]any {
-	result := make(map[string]any)
-	v := reflect.ValueOf(c).Elem()
-	t := v.Type()
-
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		ft := t.Field(i)
-		envTag := ft.Tag.Get("env")
-		if envTag == "" {
-			envTag = ft.Name
-		}
-		isSensitive := strings.Contains(ft.Tag.Get("options"), "file")
-		if isSensitive {
-			s := fmt.Sprintf("%v", field.Interface())
-			if s == "" {
-				result[envTag] = "(empty)"
-			} else {
-				result[envTag] = "****"
-			}
-		} else {
-			result[envTag] = field.Interface()
-		}
-	}
-	return result
-}
-
-// ─── Loader internals (Arcane-style reflection) ───────────────────────────────
-
+// loadFromEnv uses reflection to load configuration from environment variables.
 func loadFromEnv(cfg *Config) {
 	v := reflect.ValueOf(cfg).Elem()
-	t := v.Type()
-	for i := 0; i < v.NumField(); i++ {
-		setFieldValue(v.Field(i), t.Field(i))
-	}
-}
-
-func setFieldValue(field reflect.Value, ft reflect.StructField) {
-	envTag := ft.Tag.Get("env")
-	if envTag == "" {
-		return
-	}
-	defaultValue := ft.Tag.Get("default")
-	value := trimQuotes(os.Getenv(envTag))
-	if value == "" {
-		value = defaultValue
-	}
-	if !field.CanSet() {
-		return
-	}
-
-	switch field.Kind() {
-	case reflect.String:
-		field.SetString(value)
-	case reflect.Bool:
-		if b, err := strconv.ParseBool(value); err == nil {
-			field.SetBool(b)
-		}
-	case reflect.Int, reflect.Int64:
-		// time.Duration is an int64 under the hood; check for it specifically.
-		if field.Type() == reflect.TypeOf(time.Duration(0)) {
-			if d, err := time.ParseDuration(value); err == nil {
-				field.SetInt(int64(d))
-			} else {
-				slog.Warn("invalid duration; using zero",
-					"field", envTag, "value", value, "err", err)
-			}
+	visitConfigFields(v, func(field reflect.Value, fieldType reflect.StructField) {
+		envTag := fieldType.Tag.Get("env")
+		if envTag == "" {
 			return
 		}
-		if i, err := strconv.ParseInt(value, 10, 64); err == nil {
-			field.SetInt(i)
+
+		defaultValue := fieldType.Tag.Get("default")
+
+		// Get the environment value directly first
+		envValue := trimQuotes(os.Getenv(envTag))
+		if envValue == "" {
+			envValue = defaultValue
 		}
-	}
+
+		setFieldValueInternal(field, fieldType, envValue)
+	})
 }
 
+// applyOptions processes special options for Config fields after initial load.
 func applyOptions(cfg *Config) {
 	v := reflect.ValueOf(cfg).Elem()
-	t := v.Type()
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		ft := t.Field(i)
-		opts := ft.Tag.Get("options")
-		if opts == "" {
-			continue
+	visitConfigFields(v, func(field reflect.Value, fieldType reflect.StructField) {
+		optionsTag := fieldType.Tag.Get("options")
+		if optionsTag == "" {
+			return
 		}
-		for _, opt := range strings.Split(opts, ",") {
-			switch strings.TrimSpace(opt) {
+
+		options := strings.SplitSeq(optionsTag, ",")
+		for option := range options {
+			switch strings.TrimSpace(option) {
 			case "file":
-				resolveFileBased(field, ft)
+				resolveFileBasedEnvVariable(field, fieldType)
 			case "toLower":
 				if field.Kind() == reflect.String {
 					field.SetString(strings.ToLower(field.String()))
@@ -244,107 +134,229 @@ func applyOptions(cfg *Config) {
 				}
 			}
 		}
+	})
+}
+
+func visitConfigFields(v reflect.Value, fn func(reflect.Value, reflect.StructField)) {
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return
+	}
+
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldType := t.Field(i)
+
+		if fieldType.Anonymous {
+			if field.Kind() == reflect.Struct {
+				visitConfigFields(field, fn)
+				continue
+			}
+			if field.Kind() == reflect.Pointer && field.Type().Elem().Kind() == reflect.Struct {
+				if field.IsNil() {
+					if field.CanSet() {
+						field.Set(reflect.New(field.Type().Elem()))
+					} else {
+						continue
+					}
+				}
+				visitConfigFields(field.Elem(), fn)
+				continue
+			}
+		}
+
+		fn(field, fieldType)
 	}
 }
 
-// resolveFileBased checks for $VAR_FILE; if present, reads the file and uses
-// its contents as the field value. Used for Docker secrets.
-func resolveFileBased(field reflect.Value, ft reflect.StructField) {
-	if field.Kind() != reflect.String {
+// resolveFileBasedEnvVariable checks if an environment variable with the suffix "_FILE" is set,
+// reads the content of the file specified by that variable, and sets the corresponding field's value.
+func resolveFileBasedEnvVariable(field reflect.Value, fieldType reflect.StructField) {
+	// Only process string and []byte fields
+	isString := field.Kind() == reflect.String
+	isByteSlice := field.Kind() == reflect.Slice && field.Type().Elem().Kind() == reflect.Uint8
+	if !isString && !isByteSlice {
 		return
 	}
-	envTag := ft.Tag.Get("env")
+
+	// Only process fields with the "env" tag
+	envTag := fieldType.Tag.Get("env")
 	if envTag == "" {
 		return
 	}
-	var path string
+
+	// Check both double underscore (__FILE) and single underscore (_FILE) variants
+	// Double underscore takes precedence
+	var filePath string
 	for _, suffix := range []string{"__FILE", "_FILE"} {
-		if p := os.Getenv(envTag + suffix); p != "" {
-			path = p
+		if fp := os.Getenv(envTag + suffix); fp != "" {
+			filePath = fp
 			break
 		}
 	}
-	if path == "" {
+
+	if filePath == "" {
 		return
 	}
-	content, err := os.ReadFile(path)
+
+	fileContent, err := os.ReadFile(filePath) //nolint:gosec // file path intentionally comes from *_FILE env vars for Docker secrets
 	if err != nil {
-		slog.Warn("failed to read secret from file; falling back to direct env",
-			"field", envTag, "path", path, "err", err)
+		slog.Warn("Failed to read secret from file, falling back to direct env var",
+			"error", err)
 		return
 	}
-	field.SetString(strings.TrimSpace(string(content)))
+
+	// Log when file value overrides a direct env var
+	if os.Getenv(envTag) != "" {
+		slog.Debug("Using secret from file, overriding direct env var")
+	}
+
+	if isString {
+		field.SetString(strings.TrimSpace(string(fileContent)))
+	} else {
+		field.SetBytes(fileContent)
+	}
+}
+
+// setFieldValueInternal sets a reflect.Value from a string based on the field's type.
+func setFieldValueInternal(field reflect.Value, fieldType reflect.StructField, value string) {
+	if !field.CanSet() {
+		return
+	}
+
+	if field.Kind() == reflect.String {
+		field.SetString(value)
+		return
+	}
+
+	if field.Kind() == reflect.Bool {
+		if b, err := strconv.ParseBool(value); err == nil {
+			field.SetBool(b)
+		}
+		return
+	}
+
+	if field.Kind() == reflect.Uint32 {
+		// Handle os.FileMode (which is uint32)
+		if i, err := strconv.ParseUint(value, 8, 32); err == nil {
+			field.SetUint(i)
+		}
+		return
+	}
+
+	if field.Kind() == reflect.Int {
+		if i, err := strconv.Atoi(value); err == nil {
+			field.SetInt(int64(i))
+		}
+		return
+	}
+
+	if field.Type() == reflect.TypeFor[time.Duration]() {
+		applyDurationDefault := func(reason string) {
+			envTag := fieldType.Tag.Get("env")
+			defaultValue := fieldType.Tag.Get("default")
+
+			if fallback, fallbackErr := time.ParseDuration(defaultValue); fallbackErr == nil {
+				slog.Warn("Invalid duration for config field, using tagged default", //nolint:gosec // logging invalid config input for diagnostics is intentional here.
+					"reason", reason,
+					"field", envTag,
+					"value", value,
+					"default", defaultValue)
+				field.SetInt(int64(fallback))
+			} else {
+				slog.Warn("Invalid duration for config field and invalid tagged default", //nolint:gosec // logging invalid config input for diagnostics is intentional here.
+					"reason", reason,
+					"field", envTag,
+					"value", value,
+					"default", defaultValue)
+			}
+		}
+
+		if d, err := time.ParseDuration(value); err == nil {
+			if d > 0 {
+				field.SetInt(int64(d))
+			} else {
+				applyDurationDefault("Non-positive duration for config field")
+			}
+		} else {
+			applyDurationDefault("Invalid duration for config field")
+		}
+		return
+	}
+
+	// Handle custom types based on underlying kind
+	if field.Type().ConvertibleTo(reflect.TypeFor[string]()) {
+		// String-based types like AppEnvironment
+		field.Set(reflect.ValueOf(value).Convert(field.Type()))
+	} else if field.Type() == reflect.TypeFor[os.FileMode]() {
+		// os.FileMode
+		if i, err := strconv.ParseUint(value, 8, 32); err == nil {
+			field.Set(reflect.ValueOf(os.FileMode(i)))
+		}
+	}
 }
 
 func trimQuotes(s string) string {
-	if len(s) < 2 {
-		return s
-	}
-	if (s[0] == '"' && s[len(s)-1] == '"') ||
-		(s[0] == '\'' && s[len(s)-1] == '\'') {
-		return s[1 : len(s)-1]
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
 	}
 	return s
 }
 
-// ─── Minimal .env file loader ────────────────────────────────────────────────
-//
-// Format:
-//   # comments are ignored
-//   KEY=value
-//   KEY="quoted value with spaces"
-//   KEY='single-quoted value'
-//   export KEY=value          (the leading "export " is stripped)
-//
-// Only sets variables that aren't already in the environment, so real env
-// vars override the file. This matches standard .env semantics and means
-// systemd's EnvironmentFile= or shell exports take precedence if set.
+// ListenAddr returns the effective address for the HTTP server to bind to.
+// It uses LISTEN as the host (if set) and PORT for the port.
+// func (c *Config) ListenAddr() string {
+// 	host := strings.TrimSpace(c.Listen)
+// 	port := c.Port
+// 	if port == "" {
+// 		port = "3552"
+// 	}
+// 	if host == "" {
+// 		return ":" + port
+// 	}
+// 	return net.JoinHostPort(host, port)
+// }
 
-func loadEnvFile(path string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+// MaskSensitive returns a copy of the config with sensitive fields masked.
+// Useful for logging configuration without exposing secrets.
+func (c *Config) MaskSensitive() map[string]any {
+	result := make(map[string]any)
+	v := reflect.ValueOf(c).Elem()
+	t := v.Type()
 
-	scanner := bufio.NewScanner(f)
-	lineNo := 0
-	for scanner.Scan() {
-		lineNo++
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldType := t.Field(i)
+
+		envTag := fieldType.Tag.Get("env")
+		if envTag == "" {
+			envTag = fieldType.Name
 		}
-		line = strings.TrimPrefix(line, "export ")
 
-		eq := strings.IndexByte(line, '=')
-		if eq <= 0 {
-			return fmt.Errorf("malformed line %d: %q", lineNo, line)
-		}
-		key := strings.TrimSpace(line[:eq])
-		value := strings.TrimSpace(line[eq+1:])
-		// Strip inline comments only when the value isn't quoted.
-		if !isQuoted(value) {
-			if hash := strings.Index(value, " #"); hash >= 0 {
-				value = strings.TrimSpace(value[:hash])
+		// Fields with "file" option are considered sensitive
+		optionsTag := fieldType.Tag.Get("options")
+		isSensitive := strings.Contains(optionsTag, "file")
+
+		if isSensitive {
+			// Mask sensitive values
+			strVal := fmt.Sprintf("%v", field.Interface())
+			if len(strVal) > 0 {
+				result[envTag] = "****"
+			} else {
+				result[envTag] = "(empty)"
 			}
-		}
-		value = trimQuotes(value)
-
-		if _, exists := os.LookupEnv(key); exists {
-			continue // real env wins
-		}
-		if err := os.Setenv(key, value); err != nil {
-			return fmt.Errorf("setenv %s: %w", key, err)
+		} else {
+			result[envTag] = field.Interface()
 		}
 	}
-	return scanner.Err()
-}
 
-func isQuoted(s string) bool {
-	if len(s) < 2 {
-		return false
-	}
-	return (s[0] == '"' && s[len(s)-1] == '"') ||
-		(s[0] == '\'' && s[len(s)-1] == '\'')
+	return result
 }

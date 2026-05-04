@@ -11,11 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+
 	"github.com/EHLO1/keel/backend/internal/config"
 )
 
 func Bootstrap(ctx context.Context) error {
-	err, cfg := config.Load()
+	_ = godotenv.Load()
+	cfg := config.Load()
 
 	slog.InfoContext(ctx, "Keel is starting")
 

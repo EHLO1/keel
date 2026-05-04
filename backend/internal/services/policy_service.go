@@ -35,16 +35,11 @@ const (
 	ValkeyUnknown ValkeyRole = "unknown"
 )
 
-type Policy struct {
-	cfg *config.Config
-	// future: feature flags, debug mode, alternate rules
+func NewPolicyService(cfg *config.Config) *PolicyService {
+	return &PolicyService{cfg: cfg}
 }
 
-func New(cfg *config.Config) *Policy {
-	return &Policy{cfg: cfg}
-}
-
-func (p *Policy) Evaluate(snap *state.Snapshot) DesiredState {
+func (p *PolicyService) Evaluate(snapshot *Snapshot) DesiredState {
 	d := DesiredState{}
 	return d
 }

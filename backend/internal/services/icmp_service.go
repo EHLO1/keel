@@ -6,42 +6,44 @@ import (
 	"os"
 	"time"
 
+	"github.com/EHLO1/keel/backend/internal/config"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 )
 
-// ICMPProbeService maintains a long-lived ICMP socket and sends echo requests over wg0.
+// ICMPService maintains a long-lived ICMP socket and sends echo requests over wg0.
 // Construct once, reuse.
-type ICMPProbeService struct {
+type ICMPService struct {
+	cfg    *config.Config
 	conn   *icmp.PacketConn
 	target *net.IPAddr
 	id     int
 	seq    int
 }
 
-func NewICMPProbeService(wireguardInterface, peerWireguardIP string) (*ICMPProbeService, error) {
+func NewICMPService(cfg *config.Config) (*ICMPService, error) {
 	// "udp4" here means SOCK_DGRAM ICMP — the unprivileged variant.
 	conn, err := icmp.ListenPacket("udp4", "0.0.0.0")
 	if err != nil {
 		return nil, err
 	}
-	target, err := net.ResolveIPAddr("ip4", peerWireguardIP)
+	target, err := net.ResolveIPAddr("ip4", cfg.WireguardPeerIP)
 	if err != nil {
 		conn.Close()
 		return nil, err
 	}
-	return &ICMPProbeService{
+	return &ICMPService{
 		conn:   conn,
 		target: target,
 		id:     os.Getpid() & 0xffff,
 	}, nil
 }
 
-func (p *ICMPProbeService) Close() error { return p.conn.Close() }
+func (p *ICMPService) Close() error { return p.conn.Close() }
 
 // Ping sends one echo request and waits up to timeout for a matching reply.
 // Returns nil on success, an error otherwise.
-func (p *ICMPProbeService) Ping(ctx context.Context, timeout time.Duration) error {
+func (p *ICMPService) Ping(ctx context.Context, timeout time.Duration) error {
 	p.seq++
 	msg := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,

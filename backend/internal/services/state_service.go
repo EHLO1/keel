@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/EHLO1/keel/backend/internal/config"
-	"github.com/EHLO1/keel/backend/internal/probe"
 )
 
 // Snapshot is the immutable point-in-time view of the world.
@@ -31,19 +30,19 @@ type Snapshot struct {
 // State holds the current view and the probes used to refresh it.
 type StateService struct {
 	cfg    *config.Config
-	http   *probe.HTTPProbe
-	pg     *probe.PostgresProbe
-	valkey *probe.ValkeyProbe
-	wg     *probe.WireGuardProbe
-	icmp   *probe.ICMPProbe
+	http   *HTTPClientService
+	pg     *PostgresClientService
+	valkey *ValkeyClientService
+	wg     *WireguardService
+	icmp   *ICMPService
 
 	// atomic.Pointer makes reads lock-free and trivially correct;
 	// writes still happen serially because only Refresh writes.
 	current atomic.Pointer[Snapshot]
 }
 
-func NewStateService(cfg *config.Config, h *probe.HTTPProbe, pg *probe.PostgresProbe,
-	v *probe.ValkeyProbe, wg *probe.WireGuardProbe, ic *probe.ICMPProbe) *StateService {
+func NewStateService(cfg *config.Config, h *HTTPClientService, pg *PostgresClientService,
+	v *ValkeyClientService, wg *WireguardService, ic *ICMPService) *StateService {
 	s := &StateService{cfg: cfg, http: h, pg: pg, valkey: v, wg: wg, icmp: ic}
 	empty := &Snapshot{}
 	s.current.Store(empty)

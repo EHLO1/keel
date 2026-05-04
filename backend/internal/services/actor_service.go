@@ -8,12 +8,12 @@ import (
 
 type ActorService struct {
 	cfg    *config.Config
-	policy *policy.Policy
-	state  *state.State
+	policy *PolicyService
+	state  *StateService
 	// future: feature flags, debug mode, alternate rules
 }
 
-func NewActorService(cfg *config.Config, policy *policy.Policy, state *state.State) *ActorService {
+func NewActorService(cfg *config.Config, policy *PolicyService, state *StateService) *ActorService {
 	return &ActorService{
 		cfg:    cfg,
 		policy: policy,
@@ -21,6 +21,6 @@ func NewActorService(cfg *config.Config, policy *policy.Policy, state *state.Sta
 	}
 }
 
-func (a *ActorService) Apply(ctx context.Context, desired *policy.DesiredState, snap *state.Snapshot) error {
+func (a *ActorService) Apply(ctx context.Context, desired *DesiredState, snapshot *Snapshot) error {
 	return nil
 }

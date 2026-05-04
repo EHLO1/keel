@@ -10,8 +10,8 @@ import (
 	"github.com/EHLO1/keel/backend/internal/config"
 )
 
-func newTestProbe() *HTTPProbeService {
-	return NewHTTP(&config.Config{ProbeTimeout: 2 * time.Second})
+func newTestProbe() *HTTPClientService {
+	return NewHTTPClientService(&config.Config{ProbeTimeout: 2 * time.Second})
 }
 
 func TestCheck_Success(t *testing.T) {
@@ -64,7 +64,7 @@ func TestCheck_Timeout(t *testing.T) {
 	defer srv.Close()
 
 	// Tighter timeout than the server's response delay.
-	p := NewHTTP(&config.Config{ProbeTimeout: 50 * time.Millisecond})
+	p := NewHTTPClientService(&config.Config{ProbeTimeout: 50 * time.Millisecond})
 	defer p.Close()
 
 	r := p.Check(context.Background(), srv.URL)

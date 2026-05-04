@@ -20,7 +20,7 @@ import (
 //
 // Construct one with NewHTTP, share it across the prober's lifetime, and
 // call Check() per endpoint per tick.
-type HTTPProbeService struct {
+type HTTPClientService struct {
 	cfg    *config.Config
 	client *http.Client
 }
@@ -31,7 +31,7 @@ type HTTPProbeService struct {
 // The client uses cfg.ProbeTimeout for both connect and total-request
 // budget. Per-call deadlines via context.Context override this when
 // stricter timing is needed.
-func NewHTTP(cfg *config.Config) *HTTPProbeService {
+func NewHTTPClientService(cfg *config.Config) *HTTPClientService {
 	transport := &http.Transport{
 		// Small pool — we hit two endpoints, both internal.
 		MaxIdleConns:        4,
@@ -46,7 +46,7 @@ func NewHTTP(cfg *config.Config) *HTTPProbeService {
 		// state is easier to reason about during failures.
 		ForceAttemptHTTP2: false,
 	}
-	return &HTTPProbeService{
+	return &HTTPClientService{
 		cfg: cfg,
 		client: &http.Client{
 			Timeout:   cfg.ProbeTimeout,
@@ -69,7 +69,7 @@ type Result struct {
 // Check performs one GET against url, returning OK only on a 2xx response.
 // Honors ctx cancellation and the configured probe timeout, whichever is
 // stricter.
-func (p *HTTPProbeService) Check(ctx context.Context, url string) Result {
+func (p *HTTPClientService) Check(ctx context.Context, url string) Result {
 	start := time.Now()
 	r := Result{URL: url}
 
@@ -102,7 +102,7 @@ func (p *HTTPProbeService) Check(ctx context.Context, url string) Result {
 
 // Close releases connections held by the underlying transport. Call
 // during graceful shutdown. Safe to call multiple times.
-func (p *HTTPProbeService) Close() {
+func (p *HTTPClientService) Close() {
 	if t, ok := p.client.Transport.(*http.Transport); ok {
 		t.CloseIdleConnections()
 	}

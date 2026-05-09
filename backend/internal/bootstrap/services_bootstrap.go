@@ -5,11 +5,12 @@ import (
 
 	"github.com/EHLO1/keel/backend/internal/config"
 	"github.com/EHLO1/keel/backend/internal/services"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Services struct {
 	HTTP       *services.HTTPClientService
-	Postgres   *services.PostgresClientService
+	Postgres   *services.PostgresService
 	Valkey     *services.ValkeyClientService
 	WireGuard  *services.WireguardService
 	Ping       *services.ICMPService
@@ -20,11 +21,11 @@ type Services struct {
 	Reconciler *services.ReconcilerService
 }
 
-func initializeServices(ctx context.Context, cfg *config.Config) (svcs *Services, err error) {
+func initializeServices(ctx context.Context, cfg *config.Config, pgPool *pgxpool.Pool) (svcs *Services, err error) {
 	svcs = &Services{}
 
 	svcs.HTTP = services.NewHTTPClientService(cfg)
-	svcs.Postgres = services.NewPostgresClientService(cfg)
+	svcs.Postgres = services.NewPostgresClientService(cfg, pgPool)
 	svcs.Valkey = services.NewValkeyClientService(cfg)
 	svcs.WireGuard = services.NewWireguardService(cfg)
 	svcs.Ping, err = services.NewICMPService(cfg)

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
 	"github.com/EHLO1/keel/backend/internal/config"
@@ -26,7 +27,14 @@ func Bootstrap(ctx context.Context) error {
 	appCtx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	appServices, err := initializeServices(appCtx, cfg)
+	// Initialize Postgres Client PGX Pool.
+	pgPool, err := initilizePGXPool(appCtx, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize postgres pgx pool: %w", err)
+	}
+	defer pgPool.Close()
+
+	appServices, err := initializeServices(appCtx, cfg, pgPool)
 	if err != nil {
 		return fmt.Errorf("failed to initialize services: %w", err)
 	}
@@ -51,6 +59,36 @@ func Bootstrap(ctx context.Context) error {
 	return nil
 }
 
+func initilizePGXPool(appCtx context.Context, cfg *config.Config) (*pgxpool.Pool, error) {
+	// Build the connection string.
+	connectionString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
+		cfg.PostgresUser,
+		cfg.PostgresPassword,
+		cfg.PostgresHost,
+		cfg.PostgresPort,
+		cfg.PostgresDB,
+	)
+
+	// Build the PGX (github.com/jackc/pgx/v5/pgxpool) Pool config.
+	poolConfig, err := pgxpool.ParseConfig(connectionString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse database config: %w", err)
+	}
+
+	// Create a new PGX Pool using config.
+	pool, err := pgxpool.NewWithConfig(appCtx, poolConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Ping the database.
+	if err := pool.Ping(appCtx); err != nil {
+		return nil, fmt.Errorf("database ping failed: %w", err)
+	}
+
+	return pool, nil
+}
+
 type PreflightCheckResult struct {
 	Errors   []string // hard failures — daemon should refuse to start
 	Warnings []string // soft issues — log and continue
@@ -60,7 +98,7 @@ func preflightChecks(appCtx context.Context, cfg *config.Config, services *Servi
 	var pre PreflightCheckResult
 
 	// Hard: wg0 must exist.
-	if err := services.WireGuard.CheckWireguardInterfaceExists(appCtx); err != nil {
+	if err := services.WireGuard.CheckWireguardInterface(appCtx); err != nil {
 		pre.Errors = append(pre.Errors, fmt.Sprintf("state file directory not writable: %v", err))
 	}
 
@@ -70,17 +108,17 @@ func preflightChecks(appCtx context.Context, cfg *config.Config, services *Servi
 	}
 
 	// Hard: local PG must be reachable (we'll need it from tick 1).
-	if _, err := services.Postgres.LocalRole(appCtx); err != nil {
+	if _, err := services.Postgres.CheckLocalRole(appCtx); err != nil {
 		pre.Errors = append(pre.Errors, fmt.Sprintf("local postgres unreachable: %v", err))
 	}
 
 	// Hard: local Valkey must be reachable.
-	if _, _, err := services.Valkey.LocalInfo(appCtx); err != nil {
+	if _, _, err := services.Valkey.CheckLocalRole(appCtx); err != nil {
 		pre.Errors = append(pre.Errors, fmt.Sprintf("local valkey unreachable: %v", err))
 	}
 
 	// Soft: peer reachability is informational at startup.
-	if r := services.HTTP.Check(appCtx, cfg.PeerQueueHealthPath); !r.OK {
+	if r := services.HTTP.CheckPeerConnectivity(appCtx, cfg.PeerQueueHealthPath); !r.OK {
 		msg := fmt.Sprintf("peer queue-health unreachable: status=%d latency=%s",
 			r.Status, r.Latency)
 		if r.Err != nil {

@@ -239,7 +239,7 @@ func collectSnapshot(ctx context.Context, cfg *config.Config) Snapshot {
 }
 
 // ─── Pure decision logic ─────────────────────────────────────────────────────
-
+defer cancel()
 func computeDesiredState(cfg *config.Config, s Snapshot, peerDownStrikes int) DesiredState {
 	if s.Maintenance {
 		return DesiredState{

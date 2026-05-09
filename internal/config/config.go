@@ -13,6 +13,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"reflect"
 	"strconv"
@@ -44,13 +45,15 @@ type Config struct {
 
 	// ── PostgreSQL ───────────────────────────────────────────────────────────
 	// Connection Info
-	PostgresDB       string `env:"POSTGRES_REPLICATION_DB" default:"repmgr"`
-	PostgresUser     string `env:"POSTGRES_REPLICATION_USER" default:"repmgr"`
-	PostgresPassword string `env:"POSTGRES_REPLICATION_PASSWORD" default:""`
+	PostgresDB       string `env:"POSTGRES_DB" default:"postgres"`
+	PostgresUser     string `env:"POSTGRES_USER" default:"postgres"`
+	PostgresPassword string `env:"POSTGRES_PASSWORD" default:""`
 	PostgresHost     string `env:"POSTGRES_HOST" default:"localhost"`
 	PostgresPort     int    `env:"POSTGRES_PORT" default:"5432"`
 
 	// ── Valkey ───────────────────────────────────────────────────────────────
+	ValkeyDB       int    `env:"VALKEY_DB" default:"0"`
+	ValkeyHost     string `env:"VALKEY_HOST" default:"localhost"`
 	ValkeyPort     int    `env:"VALKEY_PORT" default:"6379"`
 	ValkeyPassword string `env:"VALKEY_PASSWORD" default:""`
 
@@ -309,6 +312,25 @@ func trimQuotes(s string) string {
 		}
 	}
 	return s
+}
+
+// Postgres Connection String Constructor
+func (c *Config) PostgresAddress() string {
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(c.PostgresUser, c.PostgresPassword),
+		Host:   c.PostgresHost + ":" + strconv.Itoa(c.PostgresPort),
+		Path:   c.PostgresDB,
+	}
+	return u.String()
+}
+
+// Valkey Address String Constructor
+func (c *Config) ValkeyAddress() string {
+	u := url.URL{
+		Host: c.ValkeyHost + ":" + strconv.Itoa(c.ValkeyPort),
+	}
+	return u.String()
 }
 
 // ListenAddr returns the effective address for the HTTP server to bind to.

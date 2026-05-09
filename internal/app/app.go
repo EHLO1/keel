@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 
+	"github.com/EHLO1/keel/internal/adapter/http"
+	"github.com/EHLO1/keel/internal/adapter/icmp"
 	"github.com/EHLO1/keel/internal/adapter/postgres"
 	"github.com/EHLO1/keel/internal/adapter/valkey"
 	"github.com/EHLO1/keel/internal/adapter/wireguard"

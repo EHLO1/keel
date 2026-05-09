@@ -5,6 +5,7 @@ import (
 
 	"github.com/EHLO1/keel/internal/adapter/postgres"
 	"github.com/EHLO1/keel/internal/adapter/valkey"
+	"github.com/EHLO1/keel/internal/adapter/wireguard"
 	"github.com/EHLO1/keel/internal/api"
 	"github.com/EHLO1/keel/internal/config"
 	"golang.org/x/sync/errgroup"
@@ -16,13 +17,13 @@ type App struct {
 	// Clients
 	PostgresClient   *postgres.Client
 	ValkeyClient     *valkey.Client
-	WireguardClient  *wireguard.Client
+	WireguardClient  *wireguard.Client //golang.zx2c4.com/wireguard/wgctrl
 	HTTPClient       *http.Client
 	DockerClient     *docker.Client
 	ICMPClient       *icmp.Client
 	FilesystemClient *filesystem.Client
-	SystemdClient    *systemd.Client
-	NetworkClient    *network.Client
+	SystemdClient    *systemd.Client // https://github.com/coreos/go-systemd/v22/dbus
+	NetworkClient    *network.Client // https://github.com/vishvananda/netlink
 
 	// Core Logic
 	PolicyEvaluator *policy.Evaluator
@@ -39,7 +40,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	// Initialize Adapters / Clients
 	pg := postgres.NewClient(ctx, cfg.PostgresAddress())
 	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB)
-	wg := wireguard.NewClient()
+	wg := wireguard.NewClient(cfg.WireguardInterface)
 	http := http.NewClient()
 	docker := docker.NewClient()
 	icmp := icmp.NewClient()

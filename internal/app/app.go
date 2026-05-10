@@ -2,10 +2,13 @@ package app
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/EHLO1/keel/internal/adapter/filesystem"
 	"github.com/EHLO1/keel/internal/adapter/http"
 	"github.com/EHLO1/keel/internal/adapter/icmp"
 	"github.com/EHLO1/keel/internal/adapter/postgres"
+	"github.com/EHLO1/keel/internal/adapter/systemd"
 	"github.com/EHLO1/keel/internal/adapter/valkey"
 	"github.com/EHLO1/keel/internal/adapter/wireguard"
 	"github.com/EHLO1/keel/internal/api"
@@ -39,22 +42,39 @@ type App struct {
 
 func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 
-	// Initialize Adapters / Clients
+	// ── WireGuard ────────────────────────────────────────────────────────────
+	// ─────────────────────────────────────────────────────────────────────────
+	// ── Initialize Adapters / Clients ────────────────────────────────────────
 	pg := postgres.NewClient(ctx, cfg.PostgresAddress())
 	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB)
 	wg := wireguard.NewClient(cfg.WireguardInterface)
 	http := http.NewClient()
 	docker := docker.NewClient()
-	icmp := icmp.NewClient()
-	fs := filesystem.NewClient()
-	sys := systemd.NewClient()
+	icmp, err := icmp.NewClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize icmp client: %w", err)
+	}
 	net := network.NewClient()
+	sys, err := systemd.NewClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize systemd client %w", err)
+	}
 
-	// Initialize Core Logic
+	// Filesystem Client - Initialize Directories
+	dvDir, err := filesystem.NewClient(cfg.DockerVolumeBaseDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find docker volume directory: %w", err)
+	}
+	sfDir, err := filesystem.NewClient(cfg.StateFileBaseDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find state file directory: %w", err)
+	}
+
+	// ── Initialize Core Logic ────────────────────────────────────────────────
 	policy := policy.NewEvaluator()
 	actor := actor.NewEnforcer(pg, vk, wg)
 
-	// Initialize Long-Running Workers
+	// ── Initialize Long-Running Workers ──────────────────────────────────────
 	state := state.NewService()
 	reconciler := reconciler.NewService()
 	api := api.NewServer(cfg, stateSvc)

@@ -61,11 +61,13 @@ type Config struct {
 	WireguardInterface      string        `env:"WIREGUARD_INTERFACE" default:"wg0"`
 	WireguardHandshakeStale time.Duration `env:"WIREGUARD_HANDSHAKE_STALE" default:"75s"`
 
-	// ── State files ──────────────────────────────────────────────────────────
+	// ── Files ──────────────────────────────────────────────────────────
+	DockerVolumeBaseDir string `env:"DOCKER_VOLUME_BASE_DIR" default:"/var/lib/docker/volume"`
+	StateFileBaseDir    string `env:"STATE_FILE_BASE_DIR" default:"/run/keepalived"`
 	// File the track_script reads to gate the +50 weight.
-	StateFile string `env:"STATE_FILE" default:"/run/keepalived/role"`
+	NodeRoleFile string `env:"NODE_ROLE_FILE" default:"role"`
 	// File the keepalived notify_* scripts write the current VRRP state to.
-	VRRPStateFile string `env:"VRRP_STATE_FILE" default:"/run/keepalived/vrrp_state"`
+	VRRPRoleFile string `env:"VRRP_ROLE_FILE" default:"vrrp_state"`
 	// File the deployment script touches to suspend orchestrator action.
 	MaintenanceFile string `env:"MAINTENANCE_FILE" default:"/run/keepalived/maintenance"`
 

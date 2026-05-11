@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/EHLO1/keel/internal/actor"
 	"github.com/EHLO1/keel/internal/adapter/docker"
 	"github.com/EHLO1/keel/internal/adapter/filesystem"
 	"github.com/EHLO1/keel/internal/adapter/http"
@@ -15,6 +16,9 @@ import (
 	"github.com/EHLO1/keel/internal/adapter/wireguard"
 	"github.com/EHLO1/keel/internal/api"
 	"github.com/EHLO1/keel/internal/config"
+	"github.com/EHLO1/keel/internal/policy"
+	"github.com/EHLO1/keel/internal/reconciler"
+	"github.com/EHLO1/keel/internal/state"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -35,12 +39,12 @@ type App struct {
 	StateFileDirClient *filesystem.Client
 
 	// Core Logic
-	PolicyEvaluator *policy.Evaluator
-	ActorEnforcer   *actor.Enforcer
+	PolicyEvaluator policy.Evaluator
+	ActorEnforcer   actor.Enforcer
 
 	// Long-Running Workers
-	StateService      *state.Service
-	ReconcilerService *reconciler.Service
+	StateService      state.Service
+	ReconcilerService reconciler.Service
 	APIServer         *api.Server
 }
 
@@ -85,12 +89,26 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 
 	// ── Initialize Core Logic ────────────────────────────────────────────────
-	policy := policy.NewEvaluator()
-	actor := actor.NewEnforcer(pg, vk, wg)
+	policy, err := policy.NewEvaluator()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize policy evaluator service: %w", err)
+	}
+	actor, err := actor.NewEnforcer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize actor enforcer service: %w", err)
+	}
 
 	// ── Initialize Long-Running Workers ──────────────────────────────────────
-	state := state.NewService()
-	reconciler := reconciler.NewService()
+	state, err := state.NewService()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize state service: %w", err)
+	}
+
+	reconciler, err := reconciler.NewService(state, policy, actor, net)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize reconciler service: %w", err)
+	}
+
 	api := api.NewServer(cfg.APIPort)
 
 	return &App{

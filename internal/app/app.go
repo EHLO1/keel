@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/EHLO1/keel/internal/adapter/docker"
 	"github.com/EHLO1/keel/internal/adapter/filesystem"
 	"github.com/EHLO1/keel/internal/adapter/http"
 	"github.com/EHLO1/keel/internal/adapter/icmp"
+	"github.com/EHLO1/keel/internal/adapter/network"
 	"github.com/EHLO1/keel/internal/adapter/postgres"
 	"github.com/EHLO1/keel/internal/adapter/systemd"
 	"github.com/EHLO1/keel/internal/adapter/valkey"
@@ -20,15 +22,17 @@ type App struct {
 	Config *config.Config
 
 	// Clients
-	PostgresClient   *postgres.Client
-	ValkeyClient     *valkey.Client
-	WireguardClient  *wireguard.Client //golang.zx2c4.com/wireguard/wgctrl
-	HTTPClient       *http.Client
-	DockerClient     *docker.Client
-	ICMPClient       *icmp.Client
-	FilesystemClient *filesystem.Client
-	SystemdClient    *systemd.Client // https://github.com/coreos/go-systemd/v22/dbus
-	NetworkClient    *network.Client // https://github.com/vishvananda/netlink
+	PostgresClient  *postgres.Client
+	ValkeyClient    *valkey.Client
+	WireguardClient *wireguard.Client //golang.zx2c4.com/wireguard/wgctrl
+	HTTPClient      *http.Client
+	DockerClient    *docker.Client
+	ICMPClient      *icmp.Client
+	SystemdClient   *systemd.Client // https://github.com/coreos/go-systemd/v22/dbus
+	NetworkClient   network.Client
+
+	DockerVolDirClient *filesystem.Client
+	StateFileDirClient *filesystem.Client
 
 	// Core Logic
 	PolicyEvaluator *policy.Evaluator
@@ -49,12 +53,22 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB)
 	wg := wireguard.NewClient(cfg.WireguardInterface)
 	http := http.NewClient()
-	docker := docker.NewClient()
+
+	docker, err := docker.NewClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize docker client: %w", err)
+	}
+
 	icmp, err := icmp.NewClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize icmp client: %w", err)
 	}
-	net := network.NewClient()
+
+	net, err := network.NewClient(cfg.VRRPVirtualIP)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize network client %w", err)
+	}
+
 	sys, err := systemd.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize systemd client %w", err)
@@ -77,24 +91,25 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	// ── Initialize Long-Running Workers ──────────────────────────────────────
 	state := state.NewService()
 	reconciler := reconciler.NewService()
-	api := api.NewServer(cfg, stateSvc)
+	api := api.NewServer(cfg.APIPort)
 
 	return &App{
-		Config:            cfg,
-		PostgresClient:    pg,
-		ValkeyClient:      vk,
-		WireguardClient:   wg,
-		HTTPClient:        http,
-		DockerClient:      docker,
-		ICMPClient:        icmp,
-		FilesystemClient:  fs,
-		SystemdClient:     sys,
-		NetworkClient:     net,
-		PolicyEvaluator:   policy,
-		ActorEnforcer:     actor,
-		StateService:      state,
-		ReconcilerService: reconciler,
-		APIServer:         api,
+		Config:             cfg,
+		PostgresClient:     pg,
+		ValkeyClient:       vk,
+		WireguardClient:    wg,
+		HTTPClient:         http,
+		DockerClient:       docker,
+		ICMPClient:         icmp,
+		DockerVolDirClient: dvDir,
+		StateFileDirClient: sfDir,
+		SystemdClient:      sys,
+		NetworkClient:      net,
+		PolicyEvaluator:    policy,
+		ActorEnforcer:      actor,
+		StateService:       state,
+		ReconcilerService:  reconciler,
+		APIServer:          api,
 	}, nil
 }
 

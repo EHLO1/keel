@@ -31,7 +31,8 @@ type Config struct {
 	// IP of the peer node on the wg0 tunnel; required.
 	WireguardPeerIP string `env:"WIREGUARD_PEER_IP" default:""`
 	// Real/Physical IP of the peer node on the physical network; required.
-	RealPeerIP string `env:"REAL_PEER_IP" default:""`
+	RealPeerIP    string `env:"REAL_PEER_IP" default:""`
+	VRRPVirtualIP string `env:"VRRP_VIRTUAL_IP" default:""`
 
 	// ── Reachability probes ──────────────────────────────────────────────────
 	// Local Hostname.
@@ -76,6 +77,7 @@ type Config struct {
 	PeerDownStrikes int           `env:"PEER_DOWN_STRIKES" default:"3"`
 	ProbeTimeout    time.Duration `env:"PROBE_TIMEOUT" default:"2s"`
 	ActionTimeout   time.Duration `env:"ACTION_TIMEOUT" default:"60s"`
+	APIPort         string        `env:"API_PORT" default:"9998"`
 
 	// ── External tools ───────────────────────────────────────────────────────
 	RepmgrBinary string `env:"REPMGR_BINARY" default:"/usr/bin/repmgr"`

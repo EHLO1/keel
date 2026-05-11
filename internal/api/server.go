@@ -3,25 +3,20 @@ package api
 import (
 	"context"
 	"net/http"
-
-	"github.com/EHLO1/keel/internal/app"
 )
 
 type Server struct {
 	httpServer *http.Server
-	state      *state.Service
 }
 
-func NewServer(cfg app.Config, stateService *state.Service) *Server {
-	s := &Server{
-		state: stateService,
-	}
+func NewServer(port string) *Server {
+	s := &Server{}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/state", s.handleGetState)
 
 	s.httpServer = &http.Server{
-		Addr:    ":" + cfg.APIPort,
+		Addr:    ":" + port,
 		Handler: mux,
 	}
 

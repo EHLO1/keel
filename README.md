@@ -1,6 +1,9 @@
 # Keel Orchestrator
 Orchestrator for 2+ node backends using WireGuard and Keepalived. Supports Postgres and Redis/Valkey.
 
+## Note on Claude:
+I understand the sentiment around AI is mixed. Claude is not writing code for me, nor any other AI model. I have always and will always use AI from an advisory perspective. I am learning Go. My research includes standard Google searches, Reddit threads, strong Go learning resources, mature projects such as Arcane and Pocket-ID, and of course reasoning about all of this with BOTH Gemini and Claude.
+
 ## Requirements
 - Linux
 - WireGuard

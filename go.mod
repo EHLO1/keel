@@ -7,6 +7,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/redis/go-redis/v9 v9.19.0
 	github.com/spf13/cobra v1.10.2
+	github.com/vishvananda/netlink v1.3.1
 	golang.org/x/net v0.33.0
 	golang.org/x/sync v0.20.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
@@ -25,6 +26,7 @@ require (
 	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
+	github.com/vishvananda/netns v0.0.5 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect

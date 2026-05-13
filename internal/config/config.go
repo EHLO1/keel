@@ -45,12 +45,12 @@ type Config struct {
 	PeerQueueHealthPath string `env:"PEER_QUEUE_HEALTH_PATH" default:"/queue-health"`
 
 	// ── PostgreSQL ───────────────────────────────────────────────────────────
-	// Connection Info
-	PostgresDB       string `env:"POSTGRES_DB" default:"postgres"`
-	PostgresUser     string `env:"POSTGRES_USER" default:"postgres"`
-	PostgresPassword string `env:"POSTGRES_PASSWORD" default:""`
-	PostgresHost     string `env:"POSTGRES_HOST" default:"localhost"`
-	PostgresPort     int    `env:"POSTGRES_PORT" default:"5432"`
+	PostgresDB         string `env:"POSTGRES_DB" default:"postgres"`
+	PostgresUser       string `env:"POSTGRES_USER" default:"postgres"`
+	PostgresPassword   string `env:"POSTGRES_PASSWORD" default:""`
+	PostgresHost       string `env:"POSTGRES_HOST" default:"localhost"`
+	PostgresPort       int    `env:"POSTGRES_PORT" default:"5432"`
+	PostgresVolumeName string `env:"POSTGRES_VOLUME_NAME" default:"postgres.data"`
 
 	// ── Valkey ───────────────────────────────────────────────────────────────
 	ValkeyDB       int    `env:"VALKEY_DB" default:"0"`
@@ -63,14 +63,18 @@ type Config struct {
 	WireguardHandshakeStale time.Duration `env:"WIREGUARD_HANDSHAKE_STALE" default:"75s"`
 
 	// ── Files ──────────────────────────────────────────────────────────
-	DockerVolumeBaseDir string `env:"DOCKER_VOLUME_BASE_DIR" default:"/var/lib/docker/volume"`
-	StateFileBaseDir    string `env:"STATE_FILE_BASE_DIR" default:"/run/keepalived"`
-	// File the track_script reads to gate the +50 weight.
-	NodeRoleFile string `env:"NODE_ROLE_FILE" default:"role"`
+	// File to enable maintenance mode.
+	MaintenanceFlagPath string `env:"MAINTENANCE_FLAG_PATH" default:"/var/keel"`
+	MaintenanceFlagFile string `env:"MAINTENANCE_FLAG_FILE" default:"maintenance_mode"`
+	// File used by Postgres to keep it from restarting as primary.
+	StandbySignalPath string `env:"STANDBY_SIGNAL_PATH" default:"/var/lib/docker/volume/pg.data"`
+	StandbySignalFile string `env:"STANDBY_SIGNAL_FILE" default:"standby.signal"`
 	// File the keepalived notify_* scripts write the current VRRP state to.
-	VRRPRoleFile string `env:"VRRP_ROLE_FILE" default:"vrrp_state"`
-	// File the deployment script touches to suspend orchestrator action.
-	MaintenanceFile string `env:"MAINTENANCE_FILE" default:"/run/keepalived/maintenance"`
+	VRRPRolePath string `env:"VRRP_ROLE_PATH" default:"/run/vrrp"`
+	VRRPRoleFile string `env:"VRRP_ROLE_FILE" default:"role"`
+	// File the track_script reads to gate the +50 weight.
+	VRRPSignalPath string `env:"VRRP_SIGNAL_PATH" default:"/run/vrrp"`
+	VRRPSignalFile string `env:"STATE_FILE_BASE_DIR" default:"keel_signal"`
 
 	// ── Loop tuning ──────────────────────────────────────────────────────────
 	TickInterval    time.Duration `env:"TICK_INTERVAL" default:"3s"`

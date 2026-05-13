@@ -35,8 +35,9 @@ type App struct {
 	SystemdClient   *systemd.Client // https://github.com/coreos/go-systemd/v22/dbus
 	NetworkClient   network.Client
 
-	DockerVolDirClient *filesystem.Client
-	StateFileDirClient *filesystem.Client
+	MaintenanceMode *filesystem.MaintenanceFlag
+	StandbySignal   *filesystem.StandbySignal
+	VRRPRole        *filesystem.VRRPRole
 
 	// Core Logic
 	PolicyEvaluator policy.Evaluator
@@ -78,15 +79,10 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize systemd client %w", err)
 	}
 
-	// Filesystem Client - Initialize Directories
-	dvDir, err := filesystem.NewClient(cfg.DockerVolumeBaseDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find docker volume directory: %w", err)
-	}
-	sfDir, err := filesystem.NewClient(cfg.StateFileBaseDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find state file directory: %w", err)
-	}
+	// Filesystem Client - Initialize Paths and Files
+	mm := filesystem.NewMaintenanceFlag(cfg.MaintenanceFlagPath, cfg.MaintenanceFlagFile)
+	ss := filesystem.NewStandbySignal(cfg.StandbySignalPath, cfg.StandbySignalFile)
+	vr := filesystem.NewVRRPRole(cfg.VRRPRolePath, cfg.VRRPRoleFile)
 
 	// ── Initialize Core Logic ────────────────────────────────────────────────
 	policy, err := policy.NewEvaluator()
@@ -112,22 +108,23 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	api := api.NewServer(cfg.APIPort)
 
 	return &App{
-		Config:             cfg,
-		PostgresClient:     pg,
-		ValkeyClient:       vk,
-		WireguardClient:    wg,
-		HTTPClient:         http,
-		DockerClient:       docker,
-		ICMPClient:         icmp,
-		DockerVolDirClient: dvDir,
-		StateFileDirClient: sfDir,
-		SystemdClient:      sys,
-		NetworkClient:      net,
-		PolicyEvaluator:    policy,
-		ActorEnforcer:      actor,
-		StateService:       state,
-		ReconcilerService:  reconciler,
-		APIServer:          api,
+		Config:            cfg,
+		PostgresClient:    pg,
+		ValkeyClient:      vk,
+		WireguardClient:   wg,
+		HTTPClient:        http,
+		DockerClient:      docker,
+		ICMPClient:        icmp,
+		SystemdClient:     sys,
+		NetworkClient:     net,
+		MaintenanceMode:   mm,
+		StandbySignal:     ss,
+		VRRPRole:          vr,
+		PolicyEvaluator:   policy,
+		ActorEnforcer:     actor,
+		StateService:      state,
+		ReconcilerService: reconciler,
+		APIServer:         api,
 	}, nil
 }
 

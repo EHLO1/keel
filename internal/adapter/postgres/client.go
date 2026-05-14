@@ -2,7 +2,10 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,22 +24,92 @@ func NewClient(ctx context.Context, addr string) *Client {
 	}
 }
 
-func (c *Client) IsPrimary(ctx context.Context) (bool, error) {
+func (c *Client) IsPrimary(ctx context.Context) (*PostgresState, error) {
+	p := &PostgresState{Reachable: false}
 	var inRecovery bool
 
 	// If Postgres instance is in recovery, return true, otherwise return false (meaning Postgres is Primary)
-	if err := c.postgres.QueryRow(ctx, "SELECT pg_is_in_recovery()").Scan(&inRecovery); err != nil {
-		return false, err
+	err := c.postgres.QueryRow(ctx, "SELECT pg_is_in_recovery()").Scan(&inRecovery)
+	switch {
+	case err != nil:
+		return
 	}
 
+	p.Reachable = true
 	return !inRecovery, nil
 
 }
 
-func (c *Client) GetPrimaryLSN(ctx context.Context) (string, error) {
-	var lsn string
-	if err := c.postgres.QueryRow(ctx, "SELECT pg_current_wal_lsn()").Scan(&lsn); err != nil {
-		return "", err
+func (c *Client) WALStateWithDiff(ctx context.Context, replicaAppName string) (*PostgresState, error) {
+
+	query := `
+		SELECT
+			pg_current_wal_lsn()::text,
+			replay_lsn::text,
+			pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn)
+		FROM pg_stat_replication
+		WHERE application_name = $1;
+	`
+	p := &PostgresState{Reachable: false}
+
+	err := c.postgres.QueryRow(ctx, query, replicaAppName).Scan(
+		&p.CurrentWriteLSN,
+		&p.ReplayLSN,
+		&p.LagBytes,
+	)
+
+	if err != nil {
+		// CRITICAL ORCHESTRATOR LOGIC:
+		// If a replica's network drops, it disappears from pg_stat_replication entirely.
+		// QueryRow will return sql.ErrNoRows. Handle this specifically so the
+		// orchestrator knows the replica is dead, rather than just throwing a generic DB error.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &PostgresState{
+				Reachable:       true,
+				StreamingActive: false,
+			}, nil
+		}
+
+		// Remaining standard connection and query errors.
+		return nil, fmt.Errorf("failed to query replication state: %w", err)
 	}
-	return lsn, nil
+
+	p.Reachable = true
+	return p, nil
+}
+
+func (c *Client) CurrentWriteLSN(ctx context.Context) (*PostgresState, error) {
+	p := &PostgresState{Reachable: false}
+
+	err := c.postgres.QueryRow(ctx, "SELECT pg_current_wal_lsn()::text").Scan(&p.CurrentWriteLSN)
+	if err != nil {
+		return nil, err
+	}
+
+	p.Reachable = true
+	return p, nil
+}
+
+func (c *Client) ReplayLSNWithDiff(ctx context.Context, targetLSN string) (*PostgresState, error) {
+	p := &PostgresState{Reachable: false}
+
+	query := `
+		SELECT
+			pg_last_wal_replay_lsn()::text,
+			pg_wal_lsn_diff(pg_last_wal_replay_lsn(), $1::pg_lsn)
+	`
+
+	// QueryRow executes the query and Scan maps the two selected columns to our two variables.
+	err := c.postgres.QueryRow(ctx, query, targetLSN).Scan(&p.ReplayLSN, &p.LagBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	p.Reachable = true
+	return p, nil
+}
+
+func (c *Client) Reachable(ctx context.Context) bool {
+	err := c.postgres.Ping(ctx)
+	return err == nil
 }

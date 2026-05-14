@@ -1,7 +1,7 @@
 # Keel Orchestrator
 Orchestrator for 2+ node backends using WireGuard and Keepalived. Supports Postgres and Redis/Valkey.
 
-## Note on Claude:
+## Note on Claude
 I understand the sentiment around AI is mixed. Claude is not writing code for me, nor any other AI model. I have always and will always use AI from an advisory perspective. I am learning Go. My research includes standard Google searches, Reddit threads, strong Go learning resources, mature projects such as Arcane and Pocket-ID, and of course reasoning about all of this with BOTH Gemini and Claude.
 
 ## Requirements
@@ -26,3 +26,5 @@ I understand the sentiment around AI is mixed. Claude is not writing code for me
 Snapshot data (Environment State) is kept in memory only, by design. When a node goes offline, it should always come online in an unhealthy/backup state. The orchestrator will then build a new snapshot from scratch. Nothing is assumed. We want to ensure that primary roles are never preempted (retaken) prematurely. Keel's primary jobs are to:
 - Inform Keepalived of the overall "healthy / unheathy" state of the node, thereby enabling Keepalived to preempt MASTER or BACKUP accordingly
 - Execute actual failover steps in Postgres and Valkey/Redis.
+
+Keel instances communicate passively. Local observations (snapshots) are authoritative. Each instance of Keel serves its "view" on a read-only API endpoint. That API endpoint is used as an additional source of telemetry for peer instances of Keel and is never used as a control channel. Decisions are made by each local instance from local snapshots. Required signals must agree, where supporting signals adjust confidence levels.

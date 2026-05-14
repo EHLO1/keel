@@ -81,7 +81,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	// Filesystem Client - Initialize Paths and Files
 	mm := filesystem.NewMaintenanceFlag(cfg.MaintenanceFlagPath, cfg.MaintenanceFlagFile)
-	ss := filesystem.NewStandbySignal(cfg.StandbySignalPath, cfg.StandbySignalFile)
+	ss := filesystem.NewStandbySignal(cfg.StandbySignalFile)
 	vr := filesystem.NewVRRPRole(cfg.VRRPRolePath, cfg.VRRPRoleFile)
 
 	// ── Initialize Core Logic ────────────────────────────────────────────────

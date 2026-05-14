@@ -5,6 +5,7 @@ go 1.26.1
 require (
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/docker/go-sdk/client v0.1.0-alpha013
+	github.com/docker/go-sdk/volume v0.1.0-alpha005
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/redis/go-redis/v9 v9.19.0
 	github.com/spf13/cobra v1.10.2

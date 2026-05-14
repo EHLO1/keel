@@ -9,6 +9,8 @@ import (
 	"github.com/EHLO1/keel/internal/types"
 )
 
+// Check for pg volume, if it doesn't exist, ignore, if it does, look for standby.signal
+
 type StateService struct {
 	current atomic.Pointer[types.Snapshot]
 }

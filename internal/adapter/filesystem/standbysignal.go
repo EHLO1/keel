@@ -1,19 +1,17 @@
 package filesystem
 
-import "path/filepath"
-
 type StandbySignal struct {
 	file string
 }
 
-func NewStandbySignal(path string, fileName string) *StandbySignal {
-	file := filepath.Clean(path) + fileName
+func NewStandbySignal(fileName string) *StandbySignal {
+	file := fileName
 
 	return &StandbySignal{
 		file: file,
 	}
 }
 
-func (s *StandbySignal) Present() (bool, error) {
-	return exists(s.file)
+func (s *StandbySignal) Present(path string) (bool, error) {
+	return exists(path + "/" + s.file)
 }

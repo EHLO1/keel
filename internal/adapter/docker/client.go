@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/docker/go-sdk/client"
+	"github.com/docker/go-sdk/volume"
 )
 
 type Client struct {
@@ -24,5 +25,9 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) GetVolumeMountpoint(ctx context.Context, volumeName string) (string, error) {
-	vol, err := c.docker.VolumeList()
+	vol, err := volume.FindByID(ctx, volumeName)
+	if err != nil {
+		return "", fmt.Errorf("docker volume does not exist: %s", err)
+	}
+	return vol.Mountpoint, nil
 }

@@ -28,6 +28,8 @@ github.com/docker/go-sdk/config v0.1.0-alpha013 h1:AbVVhOjtuyzlireZ8kJrzd3Xlrqz6
 github.com/docker/go-sdk/config v0.1.0-alpha013/go.mod h1:Eq39AVh06RUJ50fLvJHFKM80P9kZWTiog1x7NzrndBg=
 github.com/docker/go-sdk/context v0.1.0-alpha013 h1:he+yf7bEAOvDdeRkkd+vNFHiGhmZV2oSx0j7s9lI7e8=
 github.com/docker/go-sdk/context v0.1.0-alpha013/go.mod h1:a+3Mdx3Tss56tN5bajB3YfW29ZHdm6nenlB6yxIaeF4=
+github.com/docker/go-sdk/volume v0.1.0-alpha005 h1:WoW4HdULgZzjBIQIYrCgyOyFiwktEM4KfsiAYEQFqcc=
+github.com/docker/go-sdk/volume v0.1.0-alpha005/go.mod h1:o+ba9yunquIhWjqWKPMMYXNoBPbYPG8Ss0TltWTjBnM=
 github.com/docker/go-units v0.5.0 h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4=
 github.com/docker/go-units v0.5.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=

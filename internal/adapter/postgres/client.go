@@ -21,14 +21,22 @@ func NewClient(ctx context.Context, addr string) *Client {
 	}
 }
 
-func (s *Client) IsPrimary(ctx context.Context) (bool, error) {
+func (c *Client) IsPrimary(ctx context.Context) (bool, error) {
 	var inRecovery bool
 
 	// If Postgres instance is in recovery, return true, otherwise return false (meaning Postgres is Primary)
-	if err := s.postgres.QueryRow(ctx, "SELECT pg_is_in_recovery()").Scan(&inRecovery); err != nil {
+	if err := c.postgres.QueryRow(ctx, "SELECT pg_is_in_recovery()").Scan(&inRecovery); err != nil {
 		return false, err
 	}
 
 	return !inRecovery, nil
 
+}
+
+func (c *Client) GetPrimaryLSN(ctx context.Context) (string, error) {
+	var lsn string
+	if err := c.postgres.QueryRow(ctx, "SELECT pg_current_wal_lsn()").Scan(&lsn); err != nil {
+		return "", err
+	}
+	return lsn, nil
 }

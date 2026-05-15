@@ -1,13 +1,13 @@
 package policy
 
-import "github.com/EHLO1/keel/internal/types"
+import "github.com/EHLO1/keel/internal/state"
 
-type PolicyEvaluator struct{}
+type Evaluator struct{}
 
-func NewEvaluator() (*PolicyEvaluator, error) {
-	return &PolicyEvaluator{}, nil
+func NewEvaluator() (*Evaluator, error) {
+	return &Evaluator{}, nil
 }
 
-func (e *PolicyEvaluator) Evaluate(snapshot *types.Snapshot) *types.DesiredState {
-	return &types.DesiredState{}
+func (e *Evaluator) Evaluate(snapshot *state.Snapshot) *DesiredState {
+	return &DesiredState{}
 }

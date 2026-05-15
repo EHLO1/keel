@@ -7,7 +7,7 @@ import (
 )
 
 type VrrpRole string
-type PostgresRole string
+
 type ValkeyRole string
 type NodeRole string
 type UpDown string
@@ -18,14 +18,6 @@ const (
 	VrrpBackup  VrrpRole = "BACKUP"
 	VrrpFault   VrrpRole = "FAULT"
 	VrrpUnknown VrrpRole = "UNKNOWN"
-
-	PostgresPrimary PostgresRole = "primary"
-	PostgresStandby PostgresRole = "standby"
-	PostgresUnknown PostgresRole = "unknown"
-
-	ValkeyMaster  ValkeyRole = "master"
-	ValkeyReplica ValkeyRole = "replica"
-	ValkeyUnknown ValkeyRole = "unknown"
 
 	NodePrimary   NodeRole = "primary"
 	NodeSecondary NodeRole = "secondary"
@@ -44,7 +36,7 @@ type Snapshot struct {
 	VRRPRole                 VrrpRole               `json:"vrrp_role"`                   // filesystem
 	OwnsVIP                  bool                   `json:"owns_vip"`                    // network
 	Postgres                 postgres.PostgresState `json:"postgres"`                    // postgres
-	ValkeyRole               ValkeyRole             `json:"valkey_role"`                 // valkey
+	Valkey                   Valkey                 `json:"valkey"`                      // valkey
 	WireGuardTunnelState     Health                 `json:"wireguard_tunnel_state"`      // wireguard
 	WireGuardHandshakeAge    float64                `json:"wireguard_handshake_age_sec"` // wireguard
 	PeerIsReachableWireGuard bool                   `json:"peer_is_reachable_wireguard"` // icmp
@@ -56,17 +48,4 @@ type Snapshot struct {
 	KeepalivedService        UpDown                 `json:"keepalived_service"`          // systemd
 	DockerBackendStatus      Health                 `json:"docker_backend_status"`       // docker
 	DockerFrontendStatus     Health                 `json:"docker_frontend_status"`      // docker
-}
-
-type HostPort struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
-}
-
-type DesiredState struct {
-	Postgres        PostgresRole `json:"postgres"`
-	Valkey          ValkeyRole   `json:"valkey"`
-	ValkeyReplicaOf *HostPort    `json:"valkey_replica_of,omitempty"`
-	StateFile       string       `json:"state_file,omitempty"`
-	Rationale       string       `json:"rationale"`
 }

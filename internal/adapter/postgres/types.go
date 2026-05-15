@@ -7,7 +7,7 @@ type Role string
 const (
 	RoleUnknown Role = ""
 	RolePrimary Role = "primary"
-	RoleStandby Role = "standby"
+	RoleReplica Role = "replica"
 )
 
 type PostgresState struct {

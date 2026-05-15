@@ -6,33 +6,34 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/EHLO1/keel/internal/types"
+	"github.com/EHLO1/keel/internal/adapter/postgres"
 )
 
 // Check for pg volume, if it doesn't exist, ignore, if it does, look for standby.signal
 
-type StateService struct {
-	current atomic.Pointer[types.Snapshot]
+type Service struct {
+	current atomic.Pointer[Snapshot]
+	pg      *postgres.Client
 }
 
-func NewService() (*StateService, error) {
-	s := &StateService{}
-	empty := &types.Snapshot{}
+func NewService(pg *postgres.Client) (*Service, error) {
+	s := &Service{pg: pg}
+	empty := &Snapshot{}
 	s.current.Store(empty)
 	return s, nil
 }
 
-func (s *StateService) Start(ctx context.Context) error {
+func (s *Service) Start(ctx context.Context) error {
 	return nil
 }
 
 // Refresh uses all clients concurrently and atomically updates current.
 // Called once per reconciler tick; the goroutine fan-out is the same
 // pattern from collectSnapshot.
-func (s *StateService) Refresh(ctx context.Context) *types.Snapshot {
+func (s *Service) Refresh(ctx context.Context) *Snapshot {
 	var (
 		wg   sync.WaitGroup
-		snap = &types.Snapshot{CapturedAt: time.Now()}
+		snap = &Snapshot{CapturedAt: time.Now()}
 	)
 
 	// Fan out probes — same shape as before, but each probe call
@@ -55,6 +56,6 @@ func (s *StateService) Refresh(ctx context.Context) *types.Snapshot {
 }
 
 // Current returns the most recently refreshed snapshot. Lock-free read.
-func (s *StateService) Current() *types.Snapshot {
+func (s *Service) Current() *Snapshot {
 	return s.current.Load()
 }

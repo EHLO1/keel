@@ -1,13 +1,72 @@
 package state
 
 import (
-	"context"
+	"time"
 
-	"github.com/EHLO1/keel/internal/types"
+	"github.com/EHLO1/keel/internal/adapter/postgres"
 )
 
-type Service interface {
-	Start(ctx context.Context) error
-	Refresh(ctx context.Context) *types.Snapshot
-	Current() *types.Snapshot
+type VrrpRole string
+type PostgresRole string
+type ValkeyRole string
+type NodeRole string
+type UpDown string
+type Health string
+
+const (
+	VrrpMaster  VrrpRole = "MASTER"
+	VrrpBackup  VrrpRole = "BACKUP"
+	VrrpFault   VrrpRole = "FAULT"
+	VrrpUnknown VrrpRole = "UNKNOWN"
+
+	PostgresPrimary PostgresRole = "primary"
+	PostgresStandby PostgresRole = "standby"
+	PostgresUnknown PostgresRole = "unknown"
+
+	ValkeyMaster  ValkeyRole = "master"
+	ValkeyReplica ValkeyRole = "replica"
+	ValkeyUnknown ValkeyRole = "unknown"
+
+	NodePrimary   NodeRole = "primary"
+	NodeSecondary NodeRole = "secondary"
+
+	Up   UpDown = "up"
+	Down UpDown = "down"
+
+	Healthy   Health = "healthy"
+	Unhealthy Health = "unhealthy"
+)
+
+type Snapshot struct {
+	CapturedAt               time.Time              `json:"captured_at"`
+	PeerDownStrikes          int                    `json:"peer_down_strikes"`
+	NodeRole                 NodeRole               `json:"node_role"`
+	VRRPRole                 VrrpRole               `json:"vrrp_role"`                   // filesystem
+	OwnsVIP                  bool                   `json:"owns_vip"`                    // network
+	Postgres                 postgres.PostgresState `json:"postgres"`                    // postgres
+	ValkeyRole               ValkeyRole             `json:"valkey_role"`                 // valkey
+	WireGuardTunnelState     Health                 `json:"wireguard_tunnel_state"`      // wireguard
+	WireGuardHandshakeAge    float64                `json:"wireguard_handshake_age_sec"` // wireguard
+	PeerIsReachableWireGuard bool                   `json:"peer_is_reachable_wireguard"` // icmp
+	PeerIsReachable          bool                   `json:"peer_is_reachable"`           // icmp
+	LoadBalancerIsReachable  bool                   `json:"load_balancer_is_reachable"`  // http
+	Maintenance              bool                   `json:"maintenance"`                 // filesystem
+	DockerService            UpDown                 `json:"docker_service"`              // systemd
+	WireGuardService         UpDown                 `json:"wireguard_service"`           // systemd
+	KeepalivedService        UpDown                 `json:"keepalived_service"`          // systemd
+	DockerBackendStatus      Health                 `json:"docker_backend_status"`       // docker
+	DockerFrontendStatus     Health                 `json:"docker_frontend_status"`      // docker
+}
+
+type HostPort struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+type DesiredState struct {
+	Postgres        PostgresRole `json:"postgres"`
+	Valkey          ValkeyRole   `json:"valkey"`
+	ValkeyReplicaOf *HostPort    `json:"valkey_replica_of,omitempty"`
+	StateFile       string       `json:"state_file,omitempty"`
+	Rationale       string       `json:"rationale"`
 }

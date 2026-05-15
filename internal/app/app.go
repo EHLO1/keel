@@ -95,7 +95,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 
 	// ── Initialize Long-Running Workers ──────────────────────────────────────
-	state, err := state.NewService()
+	state, err := state.NewService(pg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize state service: %w", err)
 	}

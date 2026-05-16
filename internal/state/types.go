@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/EHLO1/keel/internal/adapter/postgres"
+	"github.com/EHLO1/keel/internal/adapter/valkey"
 )
 
 type VrrpRole string
@@ -36,7 +37,7 @@ type Snapshot struct {
 	VRRPRole                 VrrpRole               `json:"vrrp_role"`                   // filesystem
 	OwnsVIP                  bool                   `json:"owns_vip"`                    // network
 	Postgres                 postgres.PostgresState `json:"postgres"`                    // postgres
-	Valkey                   Valkey                 `json:"valkey"`                      // valkey
+	Valkey                   valkey.ValkeyState     `json:"valkey"`                      // valkey
 	WireGuardTunnelState     Health                 `json:"wireguard_tunnel_state"`      // wireguard
 	WireGuardHandshakeAge    float64                `json:"wireguard_handshake_age_sec"` // wireguard
 	PeerIsReachableWireGuard bool                   `json:"peer_is_reachable_wireguard"` // icmp

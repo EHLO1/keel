@@ -14,7 +14,6 @@ var rootCmd = &cobra.Command{
 	Use:          "keel",
 	Long:         "Keel - Backend Orchestrator for 2+ Nodes.",
 	SilenceUsage: true,
-	SilenceError: true,
 }
 
 func Execute() {

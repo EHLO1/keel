@@ -3,9 +3,9 @@ package actor
 import (
 	"context"
 
-	"github.com/EHLO1/keel/internal/types"
+	"github.com/EHLO1/keel/internal/policy"
 )
 
 type Enforcer interface {
-	Apply(ctx context.Context, desiredState *types.DesiredState) error
+	Apply(ctx context.Context, desiredState *policy.DesiredState) error
 }

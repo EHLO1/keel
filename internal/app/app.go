@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/EHLO1/keel/internal/actor"
 	"github.com/EHLO1/keel/internal/adapter/docker"
@@ -40,21 +42,25 @@ type App struct {
 	VRRPRole        *filesystem.VRRPRole
 
 	// Core Logic
-	PolicyEvaluator policy.Evaluator
+	PolicyEvaluator *policy.Evaluator
 	ActorEnforcer   actor.Enforcer
 
 	// Long-Running Workers
-	StateService      state.Service
+	StateService      *state.Service
 	ReconcilerService reconciler.Service
 	APIServer         *api.Server
 }
 
 func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
 
 	// ── WireGuard ────────────────────────────────────────────────────────────
 	// ─────────────────────────────────────────────────────────────────────────
 	// ── Initialize Adapters / Clients ────────────────────────────────────────
-	pg := postgres.NewClient(ctx, cfg.PostgresAddress())
+	pg := postgres.NewClient(ctx, cfg.PostgresAddress(), logger.With("component", "postgres"))
 	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB)
 	wg := wireguard.NewClient(cfg.WireguardInterface)
 	http := http.NewClient()

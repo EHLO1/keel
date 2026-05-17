@@ -61,7 +61,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	// ─────────────────────────────────────────────────────────────────────────
 	// ── Initialize Adapters / Clients ────────────────────────────────────────
 	pg := postgres.NewClient(ctx, cfg.PostgresAddress(), logger.With("component", "postgres"))
-	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB)
+	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB, logger.With("component", "valkey"))
 	wg := wireguard.NewClient(cfg.WireguardInterface)
 	http := http.NewClient()
 

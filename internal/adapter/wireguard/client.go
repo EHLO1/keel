@@ -1,6 +1,7 @@
 package wireguard
 
 import (
+	"log/slog"
 	"time"
 
 	"golang.zx2c4.com/wireguard/wgctrl"
@@ -10,16 +11,26 @@ import (
 type Client struct {
 	wireguard *wgctrl.Client
 	device    *wgtypes.Device
+	log       *slog.Logger
 }
 
-func NewClient(infName string) *Client {
-	client, _ := wgctrl.New()
+func NewClient(iface string, log *slog.Logger) *Client {
+	client, err := wgctrl.New()
+	if err != nil {
+		log.Error("could not create wireguard client", "error", err)
+		return nil
+	}
 
-	device, _ := client.Device(infName)
+	device, err := client.Device(iface)
+	if err != nil {
+		log.Error("could not find interface", "error", err)
+		return nil
+	}
 
 	return &Client{
 		wireguard: client,
 		device:    device,
+		log:       log,
 	}
 }
 

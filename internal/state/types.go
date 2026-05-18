@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/EHLO1/keel/internal/adapter/postgres"
+	"github.com/EHLO1/keel/internal/adapter/systemd"
 	"github.com/EHLO1/keel/internal/adapter/valkey"
 )
 
@@ -44,9 +45,5 @@ type Snapshot struct {
 	PeerIsReachable          bool                   `json:"peer_is_reachable"`           // icmp
 	LoadBalancerIsReachable  bool                   `json:"load_balancer_is_reachable"`  // http
 	Maintenance              bool                   `json:"maintenance"`                 // filesystem
-	DockerService            UpDown                 `json:"docker_service"`              // systemd
-	WireGuardService         UpDown                 `json:"wireguard_service"`           // systemd
-	KeepalivedService        UpDown                 `json:"keepalived_service"`          // systemd
-	DockerBackendStatus      Health                 `json:"docker_backend_status"`       // docker
-	DockerFrontendStatus     Health                 `json:"docker_frontend_status"`      // docker
+	Systemd                  systemd.ServiceStatus  `json:"systemd"`                     // systemd
 }

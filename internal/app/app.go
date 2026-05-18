@@ -34,7 +34,7 @@ type App struct {
 	HTTPClient      *http.Client
 	DockerClient    *docker.Client
 	ICMPClient      *icmp.Client
-	SystemdClient   *systemd.Client // https://github.com/coreos/go-systemd/v22/dbus
+	SystemdClient   systemd.Client // https://github.com/coreos/go-systemd/v22/dbus
 	NetworkClient   network.Client
 
 	MaintenanceMode *filesystem.MaintenanceFlag
@@ -62,7 +62,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	// ── Initialize Adapters / Clients ────────────────────────────────────────
 	pg := postgres.NewClient(ctx, cfg.PostgresAddress(), logger.With("component", "postgres"))
 	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB, logger.With("component", "valkey"))
-	wg := wireguard.NewClient(cfg.WireguardInterface)
+	wg := wireguard.NewClient(cfg.WireguardInterface, logger.With("component", "wireguard"))
 	http := http.NewClient()
 
 	docker, err := docker.NewClient(ctx)
@@ -80,7 +80,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize network client %w", err)
 	}
 
-	sys, err := systemd.NewClient(ctx)
+	sys, err := systemd.NewClient(ctx, logger.With("component", "systemd"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize systemd client %w", err)
 	}

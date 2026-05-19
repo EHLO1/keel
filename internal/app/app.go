@@ -30,11 +30,11 @@ type App struct {
 	// Clients
 	PostgresClient  *postgres.Client
 	ValkeyClient    *valkey.Client
-	WireguardClient *wireguard.Client //golang.zx2c4.com/wireguard/wgctrl
+	WireguardClient *wireguard.Client
 	HTTPClient      *http.Client
 	DockerClient    *docker.Client
 	ICMPClient      *icmp.Client
-	SystemdClient   systemd.Client // https://github.com/coreos/go-systemd/v22/dbus
+	SystemdClient   systemd.Client
 	NetworkClient   network.Client
 
 	MaintenanceMode *filesystem.MaintenanceFlag
@@ -65,17 +65,17 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	wg := wireguard.NewClient(cfg.WireguardInterface, logger.With("component", "wireguard"))
 	http := http.NewClient()
 
-	docker, err := docker.NewClient(ctx)
+	docker, err := docker.NewClient(ctx, cfg.PostgresVolumeName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize docker client: %w", err)
 	}
 
-	icmp, err := icmp.NewClient()
+	icmp, err := icmp.NewClient(cfg.PingTargetList())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize icmp client: %w", err)
 	}
 
-	net, err := network.NewClient(cfg.VRRPVirtualIP)
+	network, err := network.NewClient(cfg.VRRPVirtualIP, cfg.WireguardInterface)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize network client %w", err)
 	}
@@ -90,6 +90,26 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	ss := filesystem.NewStandbySignal(cfg.StandbySignalFile)
 	vr := filesystem.NewVRRPRole(cfg.VRRPRolePath, cfg.VRRPRoleFile)
 
+	// Preflight Checks
+	// preflight := preflightChecks(appCtx, cfg, appServices)
+	// for _, w := range preflight.Warnings {
+	// 	slog.WarnContext(appCtx, "preflight warning", "issue", w)
+	// }
+	// if len(preflight.Errors) > 0 {
+	// 	for _, e := range preflight.Errors {
+	// 		slog.ErrorContext(appCtx, "preflight error", "issue", e)
+	// 	}
+	// 	return fmt.Errorf("preflight failed: %d errors", len(preflight.Errors))
+	// }
+
+	// if err := runServices(ctx, cancel, appServices); err != nil {
+	// 	return err
+	// }
+
+	// slog.InfoContext(appCtx, "Keel shutdown complete.")
+
+	// return nil
+
 	// ── Initialize Core Logic ────────────────────────────────────────────────
 	policy, err := policy.NewEvaluator()
 	if err != nil {
@@ -101,7 +121,20 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 
 	// ── Initialize Long-Running Workers ──────────────────────────────────────
-	state, err := state.NewService(pg)
+	state, err := state.NewService(
+		pg,
+		vk,
+		wg,
+		http,
+		docker,
+		icmp,
+		network,
+		sys,
+		mm,
+		ss,
+		vr,
+		logger.With("component", "stateService"),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize state service: %w", err)
 	}
@@ -122,7 +155,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 		DockerClient:      docker,
 		ICMPClient:        icmp,
 		SystemdClient:     sys,
-		NetworkClient:     net,
+		NetworkClient:     network,
 		MaintenanceMode:   mm,
 		StandbySignal:     ss,
 		VRRPRole:          vr,
@@ -154,3 +187,39 @@ func (a *App) Run(ctx context.Context) error {
 	// triggering a graceful shutdown for everything else.
 	return g.Wait()
 }
+
+// func preflightChecks(appCtx context.Context, cfg *config.Config, services *Services) PreflightCheckResult {
+// 	var pre PreflightCheckResult
+
+// 	// Hard: wg0 must exist.
+// 	if err := services.WireGuard.CheckWireguardInterface(appCtx); err != nil {
+// 		pre.Errors = append(pre.Errors, fmt.Sprintf("state file directory not writable: %v", err))
+// 	}
+
+// 	// Hard: state file directory must be writable.
+// 	if err := services.Filesystem.CheckWritableDir(filepath.Dir(cfg.StateFile)); err != nil {
+// 		pre.Errors = append(pre.Errors, fmt.Sprintf("state file directory not writable: %v", err))
+// 	}
+
+// 	// Hard: local PG must be reachable (we'll need it from tick 1).
+// 	if _, err := services.Postgres.CheckLocalRole(appCtx); err != nil {
+// 		pre.Errors = append(pre.Errors, fmt.Sprintf("local postgres unreachable: %v", err))
+// 	}
+
+// 	// Hard: local Valkey must be reachable.
+// 	if _, _, err := services.Valkey.CheckLocalRole(appCtx); err != nil {
+// 		pre.Errors = append(pre.Errors, fmt.Sprintf("local valkey unreachable: %v", err))
+// 	}
+
+// 	// Soft: peer reachability is informational at startup.
+// 	if r := services.HTTP.CheckPeerConnectivity(appCtx, cfg.PeerQueueHealthPath); !r.OK {
+// 		msg := fmt.Sprintf("peer queue-health unreachable: status=%d latency=%s",
+// 			r.Status, r.Latency)
+// 		if r.Err != nil {
+// 			msg += " err=" + r.Err.Error()
+// 		}
+// 		pre.Warnings = append(pre.Warnings, msg)
+// 	}
+
+// 	return pre
+// }

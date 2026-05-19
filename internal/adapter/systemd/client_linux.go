@@ -16,7 +16,7 @@ type systemdClient struct {
 	log  *slog.Logger
 }
 
-func NewClient(ctx context.Context, log *slog.Logger) (*systemdClient, error) {
+func NewClient(ctx context.Context, log *slog.Logger) (Client, error) {
 	// Connect to the system bus (requires root/sudo)
 	conn, err := dbus.NewSystemdConnectionContext(ctx)
 	if err != nil {
@@ -35,8 +35,8 @@ func (c *systemdClient) Close() {
 	}
 }
 
-func (c *systemdClient) Observe(ctx context.Context, svcs []string) *ServiceStatus {
-	result := &ServiceStatus{
+func (c *systemdClient) Observe(ctx context.Context, svcs []string) ServiceStatus {
+	result := ServiceStatus{
 		ObservedAt: time.Now(),
 		Services:   make([]Service, len(svcs)),
 	}

@@ -8,11 +8,19 @@ import (
 )
 
 type mockClient struct {
-	vip string
+	vip   string
+	iface string
 }
 
-func NewClient(ipAddress string) (Client, error) {
-	return &mockClient{vip: ipAddress}, nil
+func NewClient(ipAddress string, iface string) (Client, error) {
+	return &mockClient{
+		vip:   ipAddress,
+		iface: iface,
+	}, nil
+}
+
+func (c *mockClient) ObserveVIPOwnership() (bool, error) {
+	return false, fmt.Errorf("netlink is not supported on this os")
 }
 
 func (c *mockClient) WatchVIP(ctx context.Context, eventCh chan<- VIPEvent) error {

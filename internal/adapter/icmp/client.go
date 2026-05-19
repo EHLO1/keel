@@ -12,21 +12,28 @@ import (
 )
 
 type Client struct {
-	conn *icmp.PacketConn
-	id   int
-	seq  int
-	mu   sync.Mutex
+	conn    *icmp.PacketConn
+	id      int
+	seq     int
+	mu      sync.Mutex
+	targets []net.IP
 }
 
-func NewClient() (*Client, error) {
+func NewClient(pingTargets []string) (*Client, error) {
 	conn, err := icmp.ListenPacket("udp4", "0.0.0.0")
 	if err != nil {
 		return nil, err
 	}
 
+	var icmpTargets = make([]net.IP, len(pingTargets))
+	for i, t := range pingTargets {
+		icmpTargets[i] = net.ParseIP(t)
+	}
+
 	return &Client{
-		conn: conn,
-		id:   os.Getpid() & 0xffff,
+		conn:    conn,
+		id:      os.Getpid() & 0xffff,
+		targets: icmpTargets,
 	}, nil
 }
 
@@ -94,13 +101,13 @@ func (c *Client) Ping(ctx context.Context, timeout time.Duration, target net.IP)
 	}
 }
 
-func (c *Client) Observe(ctx context.Context, timeout time.Duration, ips []net.IP) *ICMPTargets {
-	result := &ICMPTargets{
+func (c *Client) Observe(ctx context.Context, timeout time.Duration) ICMPTargets {
+	result := ICMPTargets{
 		ObservedAt: time.Now(),
-		Targets:    make([]Target, len(ips)),
+		Targets:    make([]Target, len(c.targets)),
 	}
 
-	for i, ip := range ips {
+	for i, ip := range c.targets {
 		err := c.Ping(ctx, timeout, ip)
 		result.Targets[i] = Target{
 			IP:        ip,

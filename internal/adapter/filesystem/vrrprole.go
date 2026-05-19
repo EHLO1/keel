@@ -21,7 +21,7 @@ func NewVRRPRole(path string, fileName string) *VRRPRole {
 	}
 }
 
-func (v *VRRPRole) GetCurrentRole() (string, error) {
+func (v *VRRPRole) Observe() (string, error) {
 	f, err := os.ReadFile(v.file)
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", fmt.Errorf("vrrp role file does not exist: %w", err)

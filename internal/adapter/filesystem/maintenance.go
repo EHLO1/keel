@@ -23,7 +23,7 @@ func NewMaintenanceFlag(path string, fileName string) *MaintenanceFlag {
 var ErrAlreadyEnabled = errors.New("maintenance mode is already enabled")
 var ErrNotEnabled = errors.New("maintenance mode is not enabled")
 
-func (m *MaintenanceFlag) Active() (bool, error) {
+func (m *MaintenanceFlag) Observe() (bool, error) {
 	return exists(m.file)
 }
 

@@ -12,6 +12,6 @@ func NewStandbySignal(fileName string) *StandbySignal {
 	}
 }
 
-func (s *StandbySignal) Present(path string) (bool, error) {
+func (s *StandbySignal) Observe(path string) (bool, error) {
 	return exists(path + "/" + s.file)
 }

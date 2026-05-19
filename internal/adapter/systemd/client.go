@@ -2,13 +2,11 @@ package systemd
 
 import (
 	"context"
-	"log/slog"
 	"time"
 )
 
 type Client interface {
-	NewClient(ctx context.Context, log *slog.Logger)
-	Observe(ctx context.Context, svcs []string)
+	Observe(ctx context.Context, svcs []string) ServiceStatus
 	Close()
 }
 

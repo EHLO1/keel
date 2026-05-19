@@ -2,6 +2,7 @@ package wireguard
 
 import (
 	"log/slog"
+	"net"
 	"time"
 
 	"golang.zx2c4.com/wireguard/wgctrl"
@@ -34,6 +35,20 @@ func NewClient(iface string, log *slog.Logger) *Client {
 	}
 }
 
-func (c *Client) getLastHandshake() time.Time {
-	return wgtypes.Peer{}.LastHandshakeTime
+func (c *Client) Observe() PeerHandshakeStatus {
+	p := c.device.Peers
+	result := PeerHandshakeStatus{
+		ObservedAt: time.Now(),
+		Peers:      make([]Peer, len(p)),
+	}
+
+	for i, peer := range p {
+		result.Peers[i] = Peer{
+			SourceIP:          net.ParseIP(string(peer.Endpoint.IP)),
+			LastHandshakeTime: peer.LastHandshakeTime,
+			HandshakeAge:      time.Since(peer.LastHandshakeTime).Seconds(),
+		}
+	}
+
+	return result
 }

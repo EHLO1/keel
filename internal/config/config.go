@@ -84,12 +84,19 @@ type Config struct {
 	APIPort         string        `env:"API_PORT" default:"9998"`
 
 	// ── External tools ───────────────────────────────────────────────────────
-	RepmgrBinary string `env:"REPMGR_BINARY" default:"/usr/bin/repmgr"`
-	RepmgrConfig string `env:"REPMGR_CONFIG" default:"/etc/repmgr.conf"`
+	LoadBalancerIP string `env:"LOAD_BALANCER_IP" default:""`
 
 	// ── Logging ──────────────────────────────────────────────────────────────
 	LogLevel string `env:"LOG_LEVEL" default:"info" options:"toLower"`
 	LogJSON  bool   `env:"LOG_JSON" default:"true"`
+}
+
+func (c *Config) PingTargetList() []string {
+	return []string{
+		c.WireguardPeerIP,
+		c.RealPeerIP,
+		c.LoadBalancerIP,
+	}
 }
 
 func Load() *Config {

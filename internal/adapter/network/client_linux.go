@@ -11,16 +11,43 @@ import (
 )
 
 type linuxClient struct {
-	vip net.IP
+	vip   net.IP
+	iface string
 }
 
-func NewClient(ipAddress string) (*linuxClient, error) {
+func NewClient(ipAddress string, iface string) (Client, error) {
 	parsedIP := net.ParseIP(ipAddress)
 	if parsedIP == nil {
 		return nil, fmt.Errorf("invalid IP address: %s", ipAddress)
 	}
 
-	return &linuxClient{vip: parsedIP}, nil
+	return &linuxClient{
+		vip:   parsedIP,
+		iface: iface,
+	}, nil
+}
+
+func (c *linuxClient) ObserveVIPOwnership() (bool, error) {
+	link, err := netlink.LinkByName(c.iface)
+	if err != nil {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get link %s: %w", c.iface, err)
+	}
+
+	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return false, fmt.Errorf("failed to list addresses for link %s: %w", c.iface, err)
+	}
+
+	for _, addr := range addrs {
+		if addr.IP.Equal(c.vip) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (c *linuxClient) WatchVIP(ctx context.Context, eventCh chan<- VIPEvent) error {

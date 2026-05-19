@@ -2,53 +2,177 @@ package state
 
 import (
 	"context"
+	"log/slog"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/EHLO1/keel/internal/adapter/docker"
+	"github.com/EHLO1/keel/internal/adapter/filesystem"
+	"github.com/EHLO1/keel/internal/adapter/icmp"
+	"github.com/EHLO1/keel/internal/adapter/network"
 	"github.com/EHLO1/keel/internal/adapter/postgres"
+	"github.com/EHLO1/keel/internal/adapter/systemd"
+	"github.com/EHLO1/keel/internal/adapter/valkey"
+	"github.com/EHLO1/keel/internal/adapter/wireguard"
 )
 
-// Check for pg volume, if it doesn't exist, ignore, if it does, look for standby.signal
+type Dependencies struct {
+	PG        *postgres.Client
+	VK        *valkey.Client
+	WireGuard *wireguard.Client
+	HTTP      *http.Client
+	Docker    *docker.Client
+	ICMP      *icmp.Client
+	Network   network.Client
+	Sys       systemd.Client
+	MM        *filesystem.MaintenanceFlag
+	SS        *filesystem.StandbySignal
+	VR        *filesystem.VRRPRole
+	Log       *slog.Logger
+}
 
 type Service struct {
 	current atomic.Pointer[Snapshot]
-	pg      *postgres.Client
+
+	// Clients
+	pg        *postgres.Client
+	vk        *valkey.Client
+	wireguard *wireguard.Client
+	http      *http.Client
+	docker    *docker.Client
+	icmp      *icmp.Client
+	network   network.Client
+	sys       systemd.Client
+	mm        *filesystem.MaintenanceFlag
+	ss        *filesystem.StandbySignal
+	vr        *filesystem.VRRPRole
+	log       *slog.Logger
 }
 
-func NewService(pg *postgres.Client) (*Service, error) {
-	s := &Service{pg: pg}
-	empty := &Snapshot{}
-	s.current.Store(empty)
+func NewService(deps Dependencies) (*Service, error) {
+	s := &Service{
+		pg:        deps.PG,
+		vk:        deps.VK,
+		wireguard: deps.WireGuard,
+		http:      deps.HTTP,
+		docker:    deps.Docker,
+		icmp:      deps.ICMP,
+		network:   deps.Network,
+		sys:       deps.Sys,
+		mm:        deps.MM,
+		ss:        deps.SS,
+		vr:        deps.VR,
+		log:       deps.Log,
+	}
+
+	// Initialize atomic pointer with an empty snapshot
+	s.current.Store(&Snapshot{})
 	return s, nil
 }
 
-func (s *Service) Start(ctx context.Context) error {
-	return nil
-}
+func (s *Service) Capture(parentCtx context.Context, log *slog.Logger) *Snapshot {
+	ctx, cancel := context.WithTimeout(parentCtx, 500*time.Millisecond)
+	defer cancel()
 
-// Refresh uses all clients concurrently and atomically updates current.
-// Called once per reconciler tick; the goroutine fan-out is the same
-// pattern from collectSnapshot.
-func (s *Service) Refresh(ctx context.Context) *Snapshot {
 	var (
 		wg   sync.WaitGroup
+		mu   sync.Mutex
 		snap = &Snapshot{CapturedAt: time.Now()}
 	)
 
-	// Fan out probes — same shape as before, but each probe call
-	// is a method on a StateService in internal/probe rather than a
-	// free function.
-	wg.Add(1)
-	go func() { defer wg.Done() /* snap.Vrrp = ... */ }()
-	// ... etc
+	assign := func(update func()) {
+		// Only write to the snapshot if the timeout hasn't hit.
+		// If ctx.Err() != nil, the 500ms passed and Reconciler is already reading this struct.
+		mu.Lock()
+		defer mu.Unlock()
+		if ctx.Err() == nil {
+			update()
+		}
+	}
 
-	wg.Wait()
+	wg.Go(func() {
+		ss := s.sys.Observe(ctx, []string{"docker.service", "keepalived.service", "wireguard.service"})
+		assign(func() { snap.Systemd = ss })
+	})
 
-	// Carry forward hysteresis state from the previous snapshot.
-	prev := s.current.Load()
-	if !snap.PeerIsReachableWireGuard && !snap.PeerIsReachable {
-		snap.PeerDownStrikes = prev.PeerDownStrikes + 1
+	wg.Go(func() {
+		p := s.pg.Observe(ctx)
+		assign(func() { snap.Postgres = p })
+	})
+
+	wg.Go(func() {
+		v := s.vk.Observe(ctx)
+		assign(func() { snap.Valkey = v })
+	})
+
+	wg.Go(func() {
+		o, err := s.network.ObserveVIPOwnership()
+		if err != nil {
+			assign(func() { snap.OwnsVIP = false })
+		}
+		assign(func() { snap.OwnsVIP = o })
+	})
+
+	wg.Go(func() {
+		w := s.wireguard.Observe()
+		assign(func() { snap.WireGuardHandshakeStatus = w })
+	})
+
+	wg.Go(func() {
+		t := s.icmp.Observe(ctx, 300*time.Millisecond)
+		assign(func() { snap.ICMPTargets = t })
+	})
+
+	wg.Go(func() {
+		t := s.icmp.Observe(ctx, 300*time.Millisecond)
+		assign(func() { snap.ICMPTargets = t })
+	})
+
+	wg.Go(func() {
+		r, err := s.vr.Observe()
+		if err != nil {
+			assign(func() { snap.VRRPRole = "UNKNOWN" })
+		}
+		assign(func() { snap.VRRPRole = r })
+	})
+
+	wg.Go(func() {
+		m, err := s.mm.Observe()
+		if err != nil {
+			assign(func() { snap.MaintenanceMode = m })
+		}
+		assign(func() { snap.MaintenanceMode = m })
+	})
+
+	wg.Go(func() {
+		pgVolPath, err := s.docker.GetVolumeMountpoint(ctx)
+		if err != nil {
+			assign(func() { snap.PostgresInStandby = false })
+		} else {
+			stbySig, err := s.ss.Observe(pgVolPath)
+			if err != nil {
+				assign(func() { snap.PostgresInStandby = stbySig })
+			}
+			assign(func() { snap.PostgresInStandby = stbySig })
+		}
+	})
+
+	// rest of clients
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success
+	case <-ctx.Done():
+		// Timeout elapsed. Return what finished.
+		s.log.Warn("state snapshot timed out, incomplete snapshot delivered", "duration", time.Since(snap.CapturedAt))
 	}
 
 	s.current.Store(snap)

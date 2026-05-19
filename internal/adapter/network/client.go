@@ -7,6 +7,7 @@ import (
 // The VIPEvent abstracts OS-specific network events away
 
 type Client interface {
+	ObserveVIPOwnership() (bool, error)
 	WatchVIP(ctx context.Context, ch chan<- VIPEvent) error
 }
 

@@ -2,22 +2,27 @@ package reconciler
 
 import (
 	"context"
+	"log/slog"
 	"time"
+
+	"github.com/EHLO1/keel/internal/state"
 )
 
 type ReconcilerService struct {
-	state    StateService
+	state    *state.Service
 	policy   PolicyEvaluator
 	actor    ActorEnforcer
 	vipEvent VIPWatcher
+	log      *slog.Logger
 }
 
-func NewService(state StateService, policy PolicyEvaluator, actor ActorEnforcer, vipEvent VIPWatcher) (*ReconcilerService, error) {
+func NewService(state *state.Service, policy PolicyEvaluator, actor ActorEnforcer, vipEvent VIPWatcher, log *slog.Logger) (*ReconcilerService, error) {
 	return &ReconcilerService{
 		state:    state,
 		policy:   policy,
 		actor:    actor,
 		vipEvent: vipEvent,
+		log:      log,
 	}, nil
 }
 
@@ -41,7 +46,7 @@ func (s *ReconcilerService) Start(ctx context.Context) error {
 }
 
 func (s *ReconcilerService) RunOnce(ctx context.Context) error {
-	snapshot := s.state.Refresh(ctx)
+	snapshot := s.state.Capture(ctx, s.log)
 	desired := s.policy.Evaluate(snapshot)
 	s.actor.Apply(ctx, desired)
 	return nil

@@ -3,13 +3,13 @@ package state
 import (
 	"context"
 	"log/slog"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/EHLO1/keel/internal/adapter/docker"
 	"github.com/EHLO1/keel/internal/adapter/filesystem"
+	"github.com/EHLO1/keel/internal/adapter/httpc"
 	"github.com/EHLO1/keel/internal/adapter/icmp"
 	"github.com/EHLO1/keel/internal/adapter/network"
 	"github.com/EHLO1/keel/internal/adapter/postgres"
@@ -22,7 +22,7 @@ type Dependencies struct {
 	PG        *postgres.Client
 	VK        *valkey.Client
 	WireGuard *wireguard.Client
-	HTTP      *http.Client
+	HTTPC     *httpc.Client
 	Docker    *docker.Client
 	ICMP      *icmp.Client
 	Network   network.Client
@@ -40,7 +40,7 @@ type Service struct {
 	pg        *postgres.Client
 	vk        *valkey.Client
 	wireguard *wireguard.Client
-	http      *http.Client
+	httpC     *httpc.Client
 	docker    *docker.Client
 	icmp      *icmp.Client
 	network   network.Client
@@ -56,7 +56,7 @@ func NewService(deps Dependencies) (*Service, error) {
 		pg:        deps.PG,
 		vk:        deps.VK,
 		wireguard: deps.WireGuard,
-		http:      deps.HTTP,
+		httpC:     deps.HTTPC,
 		docker:    deps.Docker,
 		icmp:      deps.ICMP,
 		network:   deps.Network,

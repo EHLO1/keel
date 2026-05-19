@@ -9,7 +9,7 @@ import (
 	"github.com/EHLO1/keel/internal/actor"
 	"github.com/EHLO1/keel/internal/adapter/docker"
 	"github.com/EHLO1/keel/internal/adapter/filesystem"
-	"github.com/EHLO1/keel/internal/adapter/http"
+	"github.com/EHLO1/keel/internal/adapter/httpc"
 	"github.com/EHLO1/keel/internal/adapter/icmp"
 	"github.com/EHLO1/keel/internal/adapter/network"
 	"github.com/EHLO1/keel/internal/adapter/postgres"
@@ -31,7 +31,7 @@ type App struct {
 	PostgresClient  *postgres.Client
 	ValkeyClient    *valkey.Client
 	WireguardClient *wireguard.Client
-	HTTPClient      *http.Client
+	HTTPClient      *httpc.Client
 	DockerClient    *docker.Client
 	ICMPClient      *icmp.Client
 	SystemdClient   systemd.Client
@@ -63,7 +63,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	pg := postgres.NewClient(ctx, cfg.PostgresAddress(), logger.With("component", "postgres"))
 	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB, logger.With("component", "valkey"))
 	wg := wireguard.NewClient(cfg.WireguardInterface, logger.With("component", "wireguard"))
-	http := http.NewClient()
+	httpC := httpc.NewClient()
 
 	docker, err := docker.NewClient(ctx, cfg.PostgresVolumeName)
 	if err != nil {
@@ -121,25 +121,25 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 
 	// ── Initialize Long-Running Workers ──────────────────────────────────────
-	state, err := state.NewService(
-		pg,
-		vk,
-		wg,
-		http,
-		docker,
-		icmp,
-		network,
-		sys,
-		mm,
-		ss,
-		vr,
-		logger.With("component", "stateService"),
-	)
+	state, err := state.NewService(state.Dependencies{
+		PG:        pg,
+		VK:        vk,
+		WireGuard: wg,
+		HTTPC:     httpC,
+		Docker:    docker,
+		ICMP:      icmp,
+		Network:   network,
+		Sys:       sys,
+		MM:        mm,
+		SS:        ss,
+		VR:        vr,
+		Log:       logger.With("component", "stateService"),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize state service: %w", err)
 	}
 
-	reconciler, err := reconciler.NewService(state, policy, actor, net)
+	reconciler, err := reconciler.NewService(state, policy, actor, network, logger.With("component", "reconciler"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize reconciler service: %w", err)
 	}
@@ -151,7 +151,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 		PostgresClient:    pg,
 		ValkeyClient:      vk,
 		WireguardClient:   wg,
-		HTTPClient:        http,
+		HTTPClient:        httpC,
 		DockerClient:      docker,
 		ICMPClient:        icmp,
 		SystemdClient:     sys,
@@ -170,10 +170,6 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 func (a *App) Run(ctx context.Context) error {
 	// errgroup tied to the signal context
 	g, gCtx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		return a.StateService.Start(gCtx)
-	})
 
 	g.Go(func() error {
 		return a.ReconcilerService.Start(gCtx)

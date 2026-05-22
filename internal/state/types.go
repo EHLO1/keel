@@ -10,16 +10,13 @@ import (
 	"github.com/EHLO1/keel/internal/adapter/wireguard"
 )
 
-type NodeRole string
-type UpDown string
+type LocalState string
 type Health string
 
 const (
-	NodePrimary   NodeRole = "primary"
-	NodeSecondary NodeRole = "secondary"
-
-	Up   UpDown = "up"
-	Down UpDown = "down"
+	LocalPrimary   LocalState = "PRIMARY"
+	LocalStandby   LocalState = "STANDBY"
+	LocalUnhealthy LocalState = "UNHEALTHY"
 
 	Healthy   Health = "healthy"
 	Unhealthy Health = "unhealthy"
@@ -29,6 +26,7 @@ type Snapshot struct {
 	// Measured or Requested
 	CapturedAt        time.Time                `json:"captured_at"`
 	Hostname          string                   `json:"hostname"`
+	LocalState        LocalState               `json:"local_state"`
 	VRRPRole          string                   `json:"vrrp_role"`           // filesystem
 	OwnsVIP           bool                     `json:"owns_vip"`            // network
 	Postgres          postgres.PostgresState   `json:"postgres"`            // postgres
@@ -40,10 +38,9 @@ type Snapshot struct {
 	PeerKeelInstances []PeerKeelInstance       `json:"peer_keel_instances"`
 
 	// Derived or Aggregated
-	PeerDownStrikes         int      `json:"peer_down_strikes"`
-	NodeRole                NodeRole `json:"node_role"`
-	WireGuardTunnelState    Health   `json:"wireguard_tunnel_state"`
-	LoadBalancerIsReachable bool     `json:"load_balancer_is_reachable"` // icmp
+	PeerDownStrikes         int    `json:"peer_down_strikes"`
+	WireGuardTunnelState    Health `json:"wireguard_tunnel_state"`
+	LoadBalancerIsReachable bool   `json:"load_balancer_is_reachable"` // icmp
 }
 
 type PeerKeelInstance struct {

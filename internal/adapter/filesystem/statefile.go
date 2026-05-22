@@ -15,6 +15,10 @@ func NewStateFile(path string, fileName string) *StateFile {
 	}
 }
 
+func (s *StateFile) Observe() (bool, error) {
+	return exists(s.file)
+}
+
 func (s *StateFile) SetHealthy() error {
 	// Ensure the parent directory exists
 	dir := filepath.Dir(s.file)

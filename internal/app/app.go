@@ -131,6 +131,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 		MM:  mm,
 		SS:  ss,
 		VR:  vr,
+		SF:  sf,
 		Log: logger.With("component", "stateService"),
 	})
 	if err != nil {

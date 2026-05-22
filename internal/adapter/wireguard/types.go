@@ -1,17 +1,18 @@
 package wireguard
 
 import (
-	"net"
 	"time"
 )
 
-type PeerHandshakeStatus struct {
+type WireguardState struct {
 	ObservedAt time.Time
+	Address    string
 	Peers      []Peer
 }
 
 type Peer struct {
-	SourceIP          net.IP
+	Endpoint          string
+	AllowedIPs        []string
 	LastHandshakeTime time.Time
 	HandshakeAge      float64
 }

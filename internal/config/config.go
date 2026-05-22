@@ -24,30 +24,12 @@ import (
 // Runtime configuration for the orchestrator daemon.
 type Config struct {
 	// ── VRRP topology ────────────────────────────────────────────────────────
-	// IP of the local node on the wg0 tunnel; required.
-	WireguardIP string `env:"WIREGUARD_IP" default:""`
-	// Real/Physical IP of the local node on the physical network; required.
-	RealIP string `env:"REAL_IP" default:""`
-	// IP of the peer node on the wg0 tunnel; required.
-	WireguardPeerIP string `env:"WIREGUARD_PEER_IP" default:""`
-	// Real/Physical IP of the peer node on the physical network; required.
-	RealPeerIP    string `env:"REAL_PEER_IP" default:""`
 	VRRPVirtualIP string `env:"VRRP_VIRTUAL_IP" default:""`
-
-	// ── Reachability probes ──────────────────────────────────────────────────
-	// Local Hostname.
-	PeerHostname string `env:"HOSTNAME" default:"" options:"toLower"`
-	// Health endpoint for the load balancer (used to gate "primary" advert).
-	LoadBalancerHealthURL string `env:"LOAD_BALANCER_HEALTH_URL" default:""`
-	// Port on the peer where the queue-health autoscaler listens.
-	PeerQueueHealthPort int `env:"PEER_QUEUE_HEALTH_PORT" default:"9999"`
-	// Path on the peer's queue-health endpoint.
-	PeerQueueHealthPath string `env:"PEER_QUEUE_HEALTH_PATH" default:"/queue-health"`
 
 	// ── PostgreSQL ───────────────────────────────────────────────────────────
 	PostgresDB         string `env:"POSTGRES_DB" default:"postgres"`
 	PostgresUser       string `env:"POSTGRES_USER" default:"postgres"`
-	PostgresPassword   string `env:"POSTGRES_PASSWORD" default:""`
+	PostgresPassword   string `env:"POSTGRES_PASSWORD" default:"" options:"file"`
 	PostgresHost       string `env:"POSTGRES_HOST" default:"localhost"`
 	PostgresPort       int    `env:"POSTGRES_PORT" default:"5432"`
 	PostgresVolumeName string `env:"POSTGRES_VOLUME_NAME" default:"postgres.data"`
@@ -56,25 +38,23 @@ type Config struct {
 	ValkeyDB       int    `env:"VALKEY_DB" default:"0"`
 	ValkeyHost     string `env:"VALKEY_HOST" default:"localhost"`
 	ValkeyPort     int    `env:"VALKEY_PORT" default:"6379"`
-	ValkeyPassword string `env:"VALKEY_PASSWORD" default:""`
+	ValkeyPassword string `env:"VALKEY_PASSWORD" default:"" options:"file"`
 
 	// ── WireGuard ────────────────────────────────────────────────────────────
-	WireguardInterface      string        `env:"WIREGUARD_INTERFACE" default:"wg0"`
-	WireguardHandshakeStale time.Duration `env:"WIREGUARD_HANDSHAKE_STALE" default:"75s"`
+	WireguardInterface string `env:"WIREGUARD_INTERFACE" default:"wg0"`
 
 	// ── Files ──────────────────────────────────────────────────────────
 	// File to enable maintenance mode.
 	MaintenanceFlagPath string `env:"MAINTENANCE_FLAG_PATH" default:"/var/keel"`
 	MaintenanceFlagFile string `env:"MAINTENANCE_FLAG_FILE" default:"maintenance_mode"`
 	// File used by Postgres to keep it from restarting as primary.
-	StandbySignalPath string `env:"STANDBY_SIGNAL_PATH" default:"/var/lib/docker/volume/pg.data"`
 	StandbySignalFile string `env:"STANDBY_SIGNAL_FILE" default:"standby.signal"`
 	// File the keepalived notify_* scripts write the current VRRP state to.
 	VRRPRolePath string `env:"VRRP_ROLE_PATH" default:"/run/vrrp"`
 	VRRPRoleFile string `env:"VRRP_ROLE_FILE" default:"role"`
 	// File the track_script reads to gate the +50 weight.
-	VRRPSignalPath string `env:"VRRP_SIGNAL_PATH" default:"/run/vrrp"`
-	VRRPSignalFile string `env:"STATE_FILE_BASE_DIR" default:"keel_signal"`
+	StateFilePath string `env:"STATE_FILE_PATH" default:"/run/keel"`
+	StateFile     string `env:"STATE_FILE" default:"state"`
 
 	// ── Loop tuning ──────────────────────────────────────────────────────────
 	TickInterval    time.Duration `env:"TICK_INTERVAL" default:"3s"`
@@ -91,20 +71,76 @@ type Config struct {
 	LogJSON  bool   `env:"LOG_JSON" default:"true"`
 }
 
-func (c *Config) PingTargetList() []string {
-	return []string{
-		c.WireguardPeerIP,
-		c.RealPeerIP,
-		c.LoadBalancerIP,
-	}
-}
+// TODO Init WireGuard first to get the peer IP lists for postgres and vakey
 
-func Load() *Config {
+func Load(envPath string) (*Config, error) {
+	if envPath != "" {
+		if err := loadEnvFile(envPath); err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+
 	cfg := &Config{}
 	loadFromEnv(cfg)
 	applyOptions(cfg)
 
-	return cfg
+	// Validate required variables as expected by TestValidateRequiresPeerIPs
+	// TODO Add required stuff for postgres and valkey
+	if cfg.WireguardInterface == "" || cfg.VRRPVirtualIP == "" {
+		return nil, fmt.Errorf("missing required configuration: WIREGUARD_INTERFACE and VRRP_VIRTUAL_IP must be specified")
+	}
+
+	return cfg, nil
+}
+
+func loadEnvFile(path string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+
+		val = stripTrailingComment(val)
+		val = trimQuotes(val)
+
+		// Real environment variables take precedence over the .env file
+		if os.Getenv(key) == "" {
+			os.Setenv(key, val)
+		}
+	}
+	return nil
+}
+
+func stripTrailingComment(val string) string {
+	inQuote := false
+	var quoteChar rune
+	for i, r := range val {
+		if r == '\'' || r == '"' {
+			if !inQuote {
+				inQuote = true
+				quoteChar = r
+			} else if r == quoteChar {
+				inQuote = false
+			}
+		}
+		if r == '#' && !inQuote {
+			return strings.TrimSpace(val[:i])
+		}
+	}
+	return val
 }
 
 // loadFromEnv uses reflection to load configuration from environment variables.

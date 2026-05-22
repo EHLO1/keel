@@ -23,6 +23,10 @@ func (c *mockClient) ObserveVIPOwnership() (bool, error) {
 	return false, fmt.Errorf("netlink is not supported on this os")
 }
 
+func (c *mockClient) ObserveWireguardIP() (string, error) {
+	return "", fmt.Errorf("netlink is not supported on this os")
+}
+
 func (c *mockClient) WatchVIP(ctx context.Context, eventCh chan<- VIPEvent) error {
 	fmt.Printf("WARN: VIP Watcher for %s not supported on this OS\n", c.vip)
 

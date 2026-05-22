@@ -20,7 +20,7 @@ var runCmd = &cobra.Command{
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
-		cfg := config.Load(envPath)
+		cfg, err := config.Load(envPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

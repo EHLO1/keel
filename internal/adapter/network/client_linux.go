@@ -8,6 +8,7 @@ import (
 	"net"
 
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
 
 type linuxClient struct {
@@ -48,6 +49,33 @@ func (c *linuxClient) ObserveVIPOwnership() (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (c *linuxClient) ObserveWireguardIP() (string, error) {
+	link, err := netlink.LinkByName(c.iface)
+	if err != nil {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to get link %s: %w", c.iface, err)
+	}
+
+	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return "", fmt.Errorf("failed to list addresses for link %s: %w", c.iface, err)
+	}
+
+	for _, addr := range addrs {
+		isSecondary := (addr.Flags & unix.RT_SCOPE_UNIVERSE) != 0
+
+		if !isSecondary {
+			if addr.Scope == unix.RT_SCOPE_UNIVERSE {
+				return addr.IPNet.IP.String(), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no primary global IPv4 address found on %s", c.iface)
 }
 
 func (c *linuxClient) WatchVIP(ctx context.Context, eventCh chan<- VIPEvent) error {

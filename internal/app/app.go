@@ -40,6 +40,7 @@ type App struct {
 	MaintenanceMode *filesystem.MaintenanceFlag
 	StandbySignal   *filesystem.StandbySignal
 	VRRPRole        *filesystem.VRRPRole
+	StateFile       *filesystem.StateFile
 
 	// Core Logic
 	PolicyEvaluator *policy.Evaluator
@@ -57,27 +58,33 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	}))
 	slog.SetDefault(logger)
 
-	// ── WireGuard ────────────────────────────────────────────────────────────
-	// ─────────────────────────────────────────────────────────────────────────
-	// ── Initialize Adapters / Clients ────────────────────────────────────────
-	pg := postgres.NewClient(ctx, cfg.PostgresAddress(), logger.With("component", "postgres"))
-	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB, logger.With("component", "valkey"))
-	wg := wireguard.NewClient(cfg.WireguardInterface, logger.With("component", "wireguard"))
-	httpC := httpc.NewClient()
-
-	docker, err := docker.NewClient(ctx, cfg.PostgresVolumeName)
+	// Initialize Adapters / Clients
+	nw, err := network.NewClient(cfg.VRRPVirtualIP, cfg.WireguardInterface)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize docker client: %w", err)
+		return nil, fmt.Errorf("failed to initialize network client %w", err)
 	}
 
-	icmp, err := icmp.NewClient(cfg.PingTargetList())
+	// Lookup local WireGuard IP
+	wrgLocalIP, err := nw.ObserveWireguardIP()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve global IPv4 for interface %s: %w", cfg.WireguardInterface, err)
+	}
+
+	// Initialize WireGuard and dynamically identify peers
+	wrg := wireguard.NewClient(cfg.WireguardInterface, wrgLocalIP, logger.With("component", "wireguard"))
+
+	pg := postgres.NewClient(ctx, cfg.PostgresAddress(), logger.With("component", "postgres"))
+	vk := valkey.NewClient(ctx, cfg.ValkeyAddress(), cfg.ValkeyPassword, cfg.ValkeyDB, logger.With("component", "valkey"))
+	hc := httpc.NewClient(cfg.APIPort, logger.With("component", "httpc"))
+
+	ic, err := icmp.NewClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize icmp client: %w", err)
 	}
 
-	network, err := network.NewClient(cfg.VRRPVirtualIP, cfg.WireguardInterface)
+	dr, err := docker.NewClient(ctx, cfg.PostgresVolumeName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize network client %w", err)
+		return nil, fmt.Errorf("failed to initialize docker client: %w", err)
 	}
 
 	sys, err := systemd.NewClient(ctx, logger.With("component", "systemd"))
@@ -89,6 +96,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	mm := filesystem.NewMaintenanceFlag(cfg.MaintenanceFlagPath, cfg.MaintenanceFlagFile)
 	ss := filesystem.NewStandbySignal(cfg.StandbySignalFile)
 	vr := filesystem.NewVRRPRole(cfg.VRRPRolePath, cfg.VRRPRoleFile)
+	sf := filesystem.NewStateFile(cfg.StateFilePath, cfg.StateFile)
 
 	// Preflight Checks
 	// preflight := preflightChecks(appCtx, cfg, appServices)
@@ -110,65 +118,76 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	// return nil
 
-	// ── Initialize Core Logic ────────────────────────────────────────────────
-	policy, err := policy.NewEvaluator()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize policy evaluator service: %w", err)
-	}
-	actor, err := actor.NewEnforcer()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize actor enforcer service: %w", err)
-	}
-
-	// ── Initialize Long-Running Workers ──────────────────────────────────────
-	state, err := state.NewService(state.Dependencies{
-		PG:        pg,
-		VK:        vk,
-		WireGuard: wg,
-		HTTPC:     httpC,
-		Docker:    docker,
-		ICMP:      icmp,
-		Network:   network,
-		Sys:       sys,
-		MM:        mm,
-		SS:        ss,
-		VR:        vr,
-		Log:       logger.With("component", "stateService"),
+	// Initialize State Service (Snapshots)
+	st, err := state.NewService(state.Dependencies{
+		PG:  pg,
+		VK:  vk,
+		WRG: wrg,
+		HC:  hc,
+		DR:  dr,
+		IC:  ic,
+		NW:  nw,
+		Sys: sys,
+		MM:  mm,
+		SS:  ss,
+		VR:  vr,
+		Log: logger.With("component", "stateService"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize state service: %w", err)
 	}
 
-	reconciler, err := reconciler.NewService(state, policy, actor, network, logger.With("component", "reconciler"))
+	// Initialize Policy & Actor Services
+	pol, err := policy.NewEvaluator(logger.With("component", "policyEvaluator"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize policy evaluator service: %w", err)
+	}
+	act, err := actor.NewEnforcer(actor.Dependencies{
+		Config: cfg,
+		ST:     st,
+		PG:     pg,
+		VK:     vk,
+		DR:     dr,
+		Sys:    sys,
+		SS:     ss,
+		SF:     sf,
+		Log:    logger.With("component", "actor"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize actor enforcer service: %w", err)
+	}
+
+	// Initialize Reconciler (Timing & Controller)
+	rec, err := reconciler.NewService(st, pol, act, nw, logger.With("component", "reconciler"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize reconciler service: %w", err)
 	}
 
-	api := api.NewServer(cfg.APIPort)
+	stapi := api.NewServer(cfg.APIPort, st)
 
 	return &App{
 		Config:            cfg,
 		PostgresClient:    pg,
 		ValkeyClient:      vk,
-		WireguardClient:   wg,
-		HTTPClient:        httpC,
-		DockerClient:      docker,
-		ICMPClient:        icmp,
+		WireguardClient:   wrg,
+		HTTPClient:        hc,
+		DockerClient:      dr,
+		ICMPClient:        ic,
 		SystemdClient:     sys,
-		NetworkClient:     network,
+		NetworkClient:     nw,
 		MaintenanceMode:   mm,
 		StandbySignal:     ss,
 		VRRPRole:          vr,
-		PolicyEvaluator:   policy,
-		ActorEnforcer:     actor,
-		StateService:      state,
-		ReconcilerService: reconciler,
-		APIServer:         api,
+		StateFile:         sf,
+		PolicyEvaluator:   pol,
+		ActorEnforcer:     act,
+		StateService:      st,
+		ReconcilerService: rec,
+		APIServer:         stapi,
 	}, nil
 }
 
 func (a *App) Run(ctx context.Context) error {
-	// errgroup tied to the signal context
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
@@ -179,8 +198,6 @@ func (a *App) Run(ctx context.Context) error {
 		return a.APIServer.Start(gCtx)
 	})
 
-	// If any of the above return an error, gCtx is canceled,
-	// triggering a graceful shutdown for everything else.
 	return g.Wait()
 }
 

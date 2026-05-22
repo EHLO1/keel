@@ -14,20 +14,18 @@ type VRRPRole struct {
 }
 
 func NewVRRPRole(path string, fileName string) *VRRPRole {
-	file := filepath.Clean(path) + fileName
-
 	return &VRRPRole{
-		file: file,
+		file: filepath.Join(path, fileName),
 	}
 }
 
 func (v *VRRPRole) Observe() (string, error) {
 	f, err := os.ReadFile(v.file)
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", fmt.Errorf("vrrp role file does not exist: %w", err)
-	}
 	if err != nil {
-		return strings.TrimSpace(string(f)), nil
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", fmt.Errorf("vrrp role file does not exist: %w", err)
+		}
+		return "", err
 	}
-	return "", err
+	return strings.TrimSpace(string(f)), nil
 }

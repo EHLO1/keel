@@ -3,7 +3,7 @@ package state
 import (
 	"time"
 
-	"github.com/EHLO1/keel/internal/adapter/icmp"
+	"github.com/EHLO1/keel/internal/adapter/httpc"
 	"github.com/EHLO1/keel/internal/adapter/postgres"
 	"github.com/EHLO1/keel/internal/adapter/systemd"
 	"github.com/EHLO1/keel/internal/adapter/valkey"
@@ -27,17 +27,17 @@ const (
 
 type Snapshot struct {
 	// Measured or Requested
-	CapturedAt               time.Time                     `json:"captured_at"`
-	VRRPRole                 string                        `json:"vrrp_role"`                  // filesystem
-	OwnsVIP                  bool                          `json:"owns_vip"`                   // network
-	Postgres                 postgres.PostgresState        `json:"postgres"`                   // postgres
-	Valkey                   valkey.ValkeyState            `json:"valkey"`                     // valkey
-	WireGuardHandshakeStatus wireguard.PeerHandshakeStatus `json:"wireguard_handshake_status"` // wireguard
-	ICMPTargets              icmp.ICMPTargets              `json:"icmp_targets"`
-	PostgresInStandby        bool                          `json:"postgres_in_standby"` // filesystem
-	MaintenanceMode          bool                          `json:"maintenance"`         // filesystem
-	Systemd                  systemd.ServiceStatus         `json:"systemd"`             // systemd
-	PeerKeelInstances        []PeerKeelInstance            `json:"peer_keel_instances"`
+	CapturedAt        time.Time                `json:"captured_at"`
+	Hostname          string                   `json:"hostname"`
+	VRRPRole          string                   `json:"vrrp_role"`           // filesystem
+	OwnsVIP           bool                     `json:"owns_vip"`            // network
+	Postgres          postgres.PostgresState   `json:"postgres"`            // postgres
+	Valkey            valkey.ValkeyState       `json:"valkey"`              // valkey
+	WireguardState    wireguard.WireguardState `json:"wireguard_state"`     // wireguard
+	PostgresInStandby bool                     `json:"postgres_in_standby"` // filesystem
+	MaintenanceMode   bool                     `json:"maintenance_mode"`    // filesystem
+	Systemd           systemd.ServiceStatus    `json:"systemd"`             // systemd
+	PeerKeelInstances []PeerKeelInstance       `json:"peer_keel_instances"`
 
 	// Derived or Aggregated
 	PeerDownStrikes         int      `json:"peer_down_strikes"`
@@ -46,16 +46,12 @@ type Snapshot struct {
 	LoadBalancerIsReachable bool     `json:"load_balancer_is_reachable"` // icmp
 }
 
-type PeerKeelSnapshot struct {
-	ObservedAt           time.Time `json:"observed_at"`
-	PeerLocalSnapshotAge float64   `json:"peer_local_snapshot_age"`
-}
-
 type PeerKeelInstance struct {
-	Hostname              string             `json:"hostname"`
-	WireguardIP           string             `json:"wireguard_ip"`
-	RealIP                string             `json:"real_ip"`
-	PingableOverWireguard bool               `json:"pingable_over_wireguard"`
-	PingableOverReal      bool               `json:"pingable_over_real"`
-	APISnapshot           []PeerKeelSnapshot `json:"api_snapshot"`
+	WireguardIP           string          `json:"wireguard_ip"`
+	RealIP                string          `json:"real_ip"`
+	PingableOverWireguard bool            `json:"pingable_over_wireguard"`
+	PingableOverReal      bool            `json:"pingable_over_real"`
+	APISnapshot           httpc.PeerState `json:"api_snapshot"`
+	APISnapshotAgeSeconds float64         `json:"api_snapshot_age_seconds"`
+	APIReachable          bool            `json:"api_reachable"`
 }

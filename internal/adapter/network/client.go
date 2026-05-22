@@ -8,6 +8,7 @@ import (
 
 type Client interface {
 	ObserveVIPOwnership() (bool, error)
+	ObserveWireguardIP() (string, error)
 	WatchVIP(ctx context.Context, ch chan<- VIPEvent) error
 }
 

@@ -3,6 +3,7 @@ package valkey
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -226,4 +227,22 @@ func (c *Client) observeReplica(state *ValkeyState, info InfoMap) {
 			continue
 		}
 	}
+}
+
+func (c *Client) PromoteToMaster(ctx context.Context) error {
+	c.log.Info("promoting valkey to master")
+	err := c.valkey.Do(ctx, "REPLICAOF", "NO", "ONE").Err()
+	if err != nil {
+		return fmt.Errorf("failed to promote valkey to master: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) MakeReplicaOf(ctx context.Context, host string, port int) error {
+	c.log.Info("setting valkey replica of", "host", host, "port", port)
+	err := c.valkey.Do(ctx, "REPLICAOF", host, strconv.Itoa(port)).Err()
+	if err != nil {
+		return fmt.Errorf("failed to configure valkey replication: %w", err)
+	}
+	return nil
 }

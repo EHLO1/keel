@@ -3,9 +3,11 @@ package docker
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/docker/go-sdk/client"
 	"github.com/docker/go-sdk/volume"
+	mobyclient "github.com/moby/moby/client"
 )
 
 type Client struct {
@@ -34,4 +36,51 @@ func (c *Client) GetVolumeMountpoint(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("docker volume does not exist: %s", err)
 	}
 	return vol.Mountpoint, nil
+}
+
+func (c *Client) RestartPostgresContainer(ctx context.Context) error {
+	res, err := c.docker.ContainerList(ctx, mobyclient.ContainerListOptions{All: true})
+	if err != nil {
+		return fmt.Errorf("failed to list docker containers: %w", err)
+	}
+
+	var targetID string
+	for _, item := range res.Items {
+		matchesVolume := false
+		for _, m := range item.Mounts {
+			if m.Name == c.pgVolName {
+				matchesVolume = true
+				break
+			}
+		}
+
+		if matchesVolume {
+			targetID = item.ID
+			break
+		}
+	}
+
+	if targetID == "" {
+		for _, item := range res.Items {
+			for _, name := range item.Names {
+				if strings.Contains(strings.ToLower(name), "postgres") {
+					targetID = item.ID
+					break
+				}
+			}
+			if targetID != "" {
+				break
+			}
+		}
+	}
+
+	if targetID == "" {
+		return fmt.Errorf("could not find container mounting volume %s or named postgres", c.pgVolName)
+	}
+
+	_, err = c.docker.ContainerRestart(ctx, targetID, mobyclient.ContainerRestartOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to restart container %s: %w", targetID, err)
+	}
+	return nil
 }

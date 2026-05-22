@@ -13,10 +13,8 @@ type MaintenanceFlag struct {
 }
 
 func NewMaintenanceFlag(path string, fileName string) *MaintenanceFlag {
-	file := filepath.Clean(path) + fileName
-
 	return &MaintenanceFlag{
-		file: file,
+		file: filepath.Join(path, fileName),
 	}
 }
 

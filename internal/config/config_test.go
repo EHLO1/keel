@@ -25,10 +25,10 @@ func writeFile(t *testing.T, dir, name, content string) string {
 }
 
 func TestLoadDefaults(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL")
-	t.Setenv("PEER_WG_IP", "10.0.0.2")
-	t.Setenv("PEER_PHYS_IP", "192.168.1.2")
-	t.Setenv("LB_HEALTH_URL", "http://lb.example/healthz")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL")
+	t.Setenv("WIREGUARD_PEER_IP", "10.0.0.2")
+	t.Setenv("REAL_PEER_IP", "192.168.1.2")
+	t.Setenv("LOAD_BALANCER_HEALTH_URL", "http://lb.example/healthz")
 
 	cfg, err := Load("")
 	if err != nil {
@@ -37,8 +37,8 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.TickInterval != 3*time.Second {
 		t.Errorf("default TickInterval: got %v", cfg.TickInterval)
 	}
-	if cfg.WGInterface != "wg0" {
-		t.Errorf("default WGInterface: got %q", cfg.WGInterface)
+	if cfg.WireguardInterface != "wg0" {
+		t.Errorf("default WireguardInterface: got %q", cfg.WireguardInterface)
 	}
 	if cfg.LogLevel != "info" {
 		t.Errorf("default LogLevel: got %q", cfg.LogLevel)
@@ -49,14 +49,14 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 func TestEnvFileLoads(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL", "TICK_INTERVAL")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL", "TICK_INTERVAL")
 
 	dir := t.TempDir()
 	envPath := writeFile(t, dir, ".env", `
 # This is the canonical orchestrator config
-PEER_WG_IP=10.0.0.2
-PEER_PHYS_IP=192.168.1.2
-LB_HEALTH_URL="http://lb.example/healthz"
+WIREGUARD_PEER_IP=10.0.0.2
+REAL_PEER_IP=192.168.1.2
+LOAD_BALANCER_HEALTH_URL="http://lb.example/healthz"
 TICK_INTERVAL=5s
 LOG_LEVEL=debug
 `)
@@ -65,11 +65,11 @@ LOG_LEVEL=debug
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.PeerWGIP != "10.0.0.2" {
-		t.Errorf("PeerWGIP: got %q", cfg.PeerWGIP)
+	if cfg.WireguardPeerIP != "10.0.0.2" {
+		t.Errorf("WireguardPeerIP: got %q", cfg.WireguardPeerIP)
 	}
-	if cfg.LBHealthURL != "http://lb.example/healthz" {
-		t.Errorf("LBHealthURL: got %q", cfg.LBHealthURL)
+	if cfg.LoadBalancerHealthURL != "http://lb.example/healthz" {
+		t.Errorf("LoadBalancerHealthURL: got %q", cfg.LoadBalancerHealthURL)
 	}
 	if cfg.TickInterval != 5*time.Second {
 		t.Errorf("TickInterval: got %v", cfg.TickInterval)
@@ -80,31 +80,31 @@ LOG_LEVEL=debug
 }
 
 func TestEnvOverridesFile(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL")
 
 	dir := t.TempDir()
 	envPath := writeFile(t, dir, ".env", `
-PEER_WG_IP=from_file
-PEER_PHYS_IP=192.168.1.2
-LB_HEALTH_URL=http://lb.example/healthz
+WIREGUARD_PEER_IP=from_file
+REAL_PEER_IP=192.168.1.2
+LOAD_BALANCER_HEALTH_URL=http://lb.example/healthz
 `)
 
-	t.Setenv("PEER_WG_IP", "from_env")
+	t.Setenv("WIREGUARD_PEER_IP", "from_env")
 
 	cfg, err := Load(envPath)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.PeerWGIP != "from_env" {
-		t.Errorf("real env should override file: got %q", cfg.PeerWGIP)
+	if cfg.WireguardPeerIP != "from_env" {
+		t.Errorf("real env should override file: got %q", cfg.WireguardPeerIP)
 	}
 }
 
 func TestToLowerOption(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL", "LOG_LEVEL")
-	t.Setenv("PEER_WG_IP", "10.0.0.2")
-	t.Setenv("PEER_PHYS_IP", "192.168.1.2")
-	t.Setenv("LB_HEALTH_URL", "http://lb.example/healthz")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL", "LOG_LEVEL")
+	t.Setenv("WIREGUARD_PEER_IP", "10.0.0.2")
+	t.Setenv("REAL_PEER_IP", "192.168.1.2")
+	t.Setenv("LOAD_BALANCER_HEALTH_URL", "http://lb.example/healthz")
 	t.Setenv("LOG_LEVEL", "DEBUG")
 
 	cfg, err := Load("")
@@ -117,27 +117,27 @@ func TestToLowerOption(t *testing.T) {
 }
 
 func TestFileBasedSecret(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL", "PG_LOCAL_DSN", "PG_LOCAL_DSN_FILE")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL", "POSTGRES_PASSWORD", "POSTGRES_PASSWORD_FILE")
 
 	dir := t.TempDir()
-	secretPath := writeFile(t, dir, "pg_dsn", "host=10.99.99.99 user=secret password=hunter2\n")
+	secretPath := writeFile(t, dir, "pg_pass", "hunter2\n")
 
-	t.Setenv("PEER_WG_IP", "10.0.0.2")
-	t.Setenv("PEER_PHYS_IP", "192.168.1.2")
-	t.Setenv("LB_HEALTH_URL", "http://lb.example/healthz")
-	t.Setenv("PG_LOCAL_DSN_FILE", secretPath)
+	t.Setenv("WIREGUARD_PEER_IP", "10.0.0.2")
+	t.Setenv("REAL_PEER_IP", "192.168.1.2")
+	t.Setenv("LOAD_BALANCER_HEALTH_URL", "http://lb.example/healthz")
+	t.Setenv("POSTGRES_PASSWORD_FILE", secretPath)
 
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.PGLocalDSN != "host=10.99.99.99 user=secret password=hunter2" {
-		t.Errorf("file-based secret not loaded: got %q", cfg.PGLocalDSN)
+	if cfg.PostgresPassword != "hunter2" {
+		t.Errorf("file-based secret not loaded: got %q", cfg.PostgresPassword)
 	}
 }
 
 func TestValidateRequiresPeerIPs(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL")
 
 	if _, err := Load(""); err == nil {
 		t.Errorf("expected error when required vars missing")
@@ -145,36 +145,36 @@ func TestValidateRequiresPeerIPs(t *testing.T) {
 }
 
 func TestMaskSensitive(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL", "PG_LOCAL_DSN")
-	t.Setenv("PEER_WG_IP", "10.0.0.2")
-	t.Setenv("PEER_PHYS_IP", "192.168.1.2")
-	t.Setenv("LB_HEALTH_URL", "http://lb.example/healthz")
-	t.Setenv("PG_LOCAL_DSN", "host=somewhere password=secret")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL", "POSTGRES_PASSWORD")
+	t.Setenv("WIREGUARD_PEER_IP", "10.0.0.2")
+	t.Setenv("REAL_PEER_IP", "192.168.1.2")
+	t.Setenv("LOAD_BALANCER_HEALTH_URL", "http://lb.example/healthz")
+	t.Setenv("POSTGRES_PASSWORD", "secret")
 
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	masked := cfg.MaskSensitive()
-	if masked["PG_LOCAL_DSN"] != "****" {
-		t.Errorf("PG_LOCAL_DSN should be masked: %v", masked["PG_LOCAL_DSN"])
+	if masked["POSTGRES_PASSWORD"] != "****" {
+		t.Errorf("POSTGRES_PASSWORD should be masked: %v", masked["POSTGRES_PASSWORD"])
 	}
-	if masked["PEER_WG_IP"] != "10.0.0.2" {
-		t.Errorf("PEER_WG_IP should not be masked: %v", masked["PEER_WG_IP"])
+	if masked["WIREGUARD_PEER_IP"] != "10.0.0.2" {
+		t.Errorf("WIREGUARD_PEER_IP should not be masked: %v", masked["WIREGUARD_PEER_IP"])
 	}
 }
 
 func TestDerivedAccessors(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL")
-	t.Setenv("PEER_WG_IP", "10.0.0.2")
-	t.Setenv("PEER_PHYS_IP", "192.168.1.2")
-	t.Setenv("LB_HEALTH_URL", "http://lb.example/healthz")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL")
+	t.Setenv("WIREGUARD_PEER_IP", "10.0.0.2")
+	t.Setenv("REAL_PEER_IP", "192.168.1.2")
+	t.Setenv("LOAD_BALANCER_HEALTH_URL", "http://lb.example/healthz")
 
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	want := "http://192.168.1.2:8080/queue-health"
+	want := "http://192.168.1.2:9999/queue-health"
 	if got := cfg.PeerQueueHealthURL(); got != want {
 		t.Errorf("PeerQueueHealthURL: got %q, want %q", got, want)
 	}
@@ -184,37 +184,37 @@ func TestDerivedAccessors(t *testing.T) {
 }
 
 func TestEnvFileCommentsAndQuotes(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL", "VALKEY_LOCAL_ADDR")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL", "VALKEY_HOST")
 
 	dir := t.TempDir()
 	envPath := writeFile(t, dir, ".env", `
 # Full-line comment
-PEER_WG_IP=10.0.0.2  # trailing comment ignored
-PEER_PHYS_IP='192.168.1.2'
-LB_HEALTH_URL="http://lb.example/healthz"
-VALKEY_LOCAL_ADDR="127.0.0.1:6379"
+WIREGUARD_PEER_IP=10.0.0.2  # trailing comment ignored
+REAL_PEER_IP='192.168.1.2'
+LOAD_BALANCER_HEALTH_URL="http://lb.example/healthz"
+VALKEY_HOST="127.0.0.1"
 `)
 
 	cfg, err := Load(envPath)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.PeerWGIP != "10.0.0.2" {
-		t.Errorf("trailing comment: got %q", cfg.PeerWGIP)
+	if cfg.WireguardPeerIP != "10.0.0.2" {
+		t.Errorf("trailing comment: got %q", cfg.WireguardPeerIP)
 	}
-	if cfg.PeerPhysIP != "192.168.1.2" {
-		t.Errorf("single-quoted: got %q", cfg.PeerPhysIP)
+	if cfg.RealPeerIP != "192.168.1.2" {
+		t.Errorf("single-quoted: got %q", cfg.RealPeerIP)
 	}
-	if cfg.ValkeyLocalAddr != "127.0.0.1:6379" {
-		t.Errorf("double-quoted: got %q", cfg.ValkeyLocalAddr)
+	if cfg.ValkeyHost != "127.0.0.1" {
+		t.Errorf("double-quoted: got %q", cfg.ValkeyHost)
 	}
 }
 
 func TestEnvFileMissingIsOK(t *testing.T) {
-	clearEnv(t, "PEER_WG_IP", "PEER_PHYS_IP", "LB_HEALTH_URL")
-	t.Setenv("PEER_WG_IP", "10.0.0.2")
-	t.Setenv("PEER_PHYS_IP", "192.168.1.2")
-	t.Setenv("LB_HEALTH_URL", "http://lb.example/healthz")
+	clearEnv(t, "WIREGUARD_PEER_IP", "REAL_PEER_IP", "LOAD_BALANCER_HEALTH_URL")
+	t.Setenv("WIREGUARD_PEER_IP", "10.0.0.2")
+	t.Setenv("REAL_PEER_IP", "192.168.1.2")
+	t.Setenv("LOAD_BALANCER_HEALTH_URL", "http://lb.example/healthz")
 
 	if _, err := Load("/nonexistent/.env"); err != nil {
 		t.Errorf("missing file should not be a fatal error: %v", err)

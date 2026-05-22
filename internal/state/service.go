@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"log/slog"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,52 +20,52 @@ import (
 )
 
 type Dependencies struct {
-	PG        *postgres.Client
-	VK        *valkey.Client
-	WireGuard *wireguard.Client
-	HTTPC     *httpc.Client
-	Docker    *docker.Client
-	ICMP      *icmp.Client
-	Network   network.Client
-	Sys       systemd.Client
-	MM        *filesystem.MaintenanceFlag
-	SS        *filesystem.StandbySignal
-	VR        *filesystem.VRRPRole
-	Log       *slog.Logger
+	PG  *postgres.Client
+	VK  *valkey.Client
+	WRG *wireguard.Client
+	HC  *httpc.Client
+	DR  *docker.Client
+	IC  *icmp.Client
+	NW  network.Client
+	Sys systemd.Client
+	MM  *filesystem.MaintenanceFlag
+	SS  *filesystem.StandbySignal
+	VR  *filesystem.VRRPRole
+	Log *slog.Logger
 }
 
 type Service struct {
 	current atomic.Pointer[Snapshot]
 
 	// Clients
-	pg        *postgres.Client
-	vk        *valkey.Client
-	wireguard *wireguard.Client
-	httpC     *httpc.Client
-	docker    *docker.Client
-	icmp      *icmp.Client
-	network   network.Client
-	sys       systemd.Client
-	mm        *filesystem.MaintenanceFlag
-	ss        *filesystem.StandbySignal
-	vr        *filesystem.VRRPRole
-	log       *slog.Logger
+	pg  *postgres.Client
+	vk  *valkey.Client
+	wrg *wireguard.Client
+	hc  *httpc.Client
+	dr  *docker.Client
+	ic  *icmp.Client
+	nw  network.Client
+	sys systemd.Client
+	mm  *filesystem.MaintenanceFlag
+	ss  *filesystem.StandbySignal
+	vr  *filesystem.VRRPRole
+	log *slog.Logger
 }
 
 func NewService(deps Dependencies) (*Service, error) {
 	s := &Service{
-		pg:        deps.PG,
-		vk:        deps.VK,
-		wireguard: deps.WireGuard,
-		httpC:     deps.HTTPC,
-		docker:    deps.Docker,
-		icmp:      deps.ICMP,
-		network:   deps.Network,
-		sys:       deps.Sys,
-		mm:        deps.MM,
-		ss:        deps.SS,
-		vr:        deps.VR,
-		log:       deps.Log,
+		pg:  deps.PG,
+		vk:  deps.VK,
+		wrg: deps.WRG,
+		hc:  deps.HC,
+		dr:  deps.DR,
+		ic:  deps.IC,
+		nw:  deps.NW,
+		sys: deps.Sys,
+		mm:  deps.MM,
+		ss:  deps.SS,
+		vr:  deps.VR,
+		log: deps.Log,
 	}
 
 	// Initialize atomic pointer with an empty snapshot
@@ -76,11 +77,24 @@ func (s *Service) Capture(parentCtx context.Context, log *slog.Logger) *Snapshot
 	ctx, cancel := context.WithTimeout(parentCtx, 500*time.Millisecond)
 	defer cancel()
 
+	wrgConfig := s.wrg.Observe()
+	hostname, _ := os.Hostname()
 	var (
 		wg   sync.WaitGroup
 		mu   sync.Mutex
-		snap = &Snapshot{CapturedAt: time.Now()}
+		snap = &Snapshot{
+			CapturedAt:     time.Now(),
+			Hostname:       hostname,
+			WireguardState: wrgConfig,
+		}
 	)
+
+	for i, peer := range wrgConfig.Peers {
+		snap.PeerKeelInstances[i] = PeerKeelInstance{
+			WireguardIP: peer.AllowedIPs[0],
+			RealIP:      peer.Endpoint,
+		}
+	}
 
 	assign := func(update func()) {
 		// Only write to the snapshot if the timeout hasn't hit.
@@ -97,6 +111,32 @@ func (s *Service) Capture(parentCtx context.Context, log *slog.Logger) *Snapshot
 		assign(func() { snap.Systemd = ss })
 	})
 
+	for i, peerInst := range snap.PeerKeelInstances {
+
+		wg.Go(func() {
+			err := s.ic.Ping(ctx, 300*time.Millisecond, peerInst.WireguardIP)
+			assign(func() {
+				snap.PeerKeelInstances[i].PingableOverWireguard = (err == nil)
+			})
+		})
+
+		wg.Go(func() {
+			err := s.ic.Ping(ctx, 300*time.Millisecond, peerInst.RealIP)
+			assign(func() {
+				snap.PeerKeelInstances[i].PingableOverReal = (err == nil)
+			})
+		})
+
+		wg.Go(func() {
+			peerSnap, reachable := s.hc.ObservePeerKeelStateAPI(ctx, peerInst.WireguardIP)
+			assign(func() {
+				snap.PeerKeelInstances[i].APISnapshot = peerSnap
+				snap.PeerKeelInstances[i].APISnapshotAgeSeconds = time.Since(peerSnap.CapturedAt).Seconds()
+				snap.PeerKeelInstances[i].APIReachable = reachable
+			})
+		})
+	}
+
 	wg.Go(func() {
 		p := s.pg.Observe(ctx)
 		assign(func() { snap.Postgres = p })
@@ -108,26 +148,11 @@ func (s *Service) Capture(parentCtx context.Context, log *slog.Logger) *Snapshot
 	})
 
 	wg.Go(func() {
-		o, err := s.network.ObserveVIPOwnership()
+		o, err := s.nw.ObserveVIPOwnership()
 		if err != nil {
 			assign(func() { snap.OwnsVIP = false })
 		}
 		assign(func() { snap.OwnsVIP = o })
-	})
-
-	wg.Go(func() {
-		w := s.wireguard.Observe()
-		assign(func() { snap.WireGuardHandshakeStatus = w })
-	})
-
-	wg.Go(func() {
-		t := s.icmp.Observe(ctx, 300*time.Millisecond)
-		assign(func() { snap.ICMPTargets = t })
-	})
-
-	wg.Go(func() {
-		t := s.icmp.Observe(ctx, 300*time.Millisecond)
-		assign(func() { snap.ICMPTargets = t })
 	})
 
 	wg.Go(func() {
@@ -147,7 +172,7 @@ func (s *Service) Capture(parentCtx context.Context, log *slog.Logger) *Snapshot
 	})
 
 	wg.Go(func() {
-		pgVolPath, err := s.docker.GetVolumeMountpoint(ctx)
+		pgVolPath, err := s.dr.GetVolumeMountpoint(ctx)
 		if err != nil {
 			assign(func() { snap.PostgresInStandby = false })
 		} else {

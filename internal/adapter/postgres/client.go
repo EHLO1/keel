@@ -60,7 +60,7 @@ func (c *Client) observeRole(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("unable to determine role: %w", err)
 	}
 
-	return !inRecovery, nil
+	return inRecovery, nil
 }
 
 func (c *Client) observeReplica(ctx context.Context, state *PostgresState) {
@@ -130,10 +130,10 @@ func (c *Client) listReplicas(ctx context.Context) ([]Replica, error) {
 		SELECT
 			application_name,
 			state,
-			COALESCE(sent_lsn):text, ''),
-			COALESCE(write_lsn):text, ''),
-			COALESCE(flush_lsn):text, ''),
-			COALESCE(replay_lsn):text, ''),
+			COALESCE(sent_lsn::text, ''),
+			COALESCE(write_lsn::text, ''),
+			COALESCE(flush_lsn::text, ''),
+			COALESCE(replay_lsn::text, ''),
 			sync_state,
 			pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS lag_bytes
 		FROM pg_stat_replication
@@ -171,4 +171,32 @@ func (c *Client) listReplicas(ctx context.Context) ([]Replica, error) {
 		return nil, fmt.Errorf("error processing replication rows: %w", err)
 	}
 	return replicas, nil
+}
+
+func (c *Client) Promote(ctx context.Context) error {
+	c.log.Info("promoting postgres standby to primary")
+	_, err := c.postgres.Exec(ctx, "SELECT pg_promote()")
+	if err != nil {
+		return fmt.Errorf("failed to promote postgres: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) Demote(ctx context.Context, peerWGIP string, port int, user, password string) error {
+	c.log.Info("demoting postgres primary to standby", "upstream_peer", peerWGIP)
+	// Build connection string to upstream primary
+	connInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=prefer connect_timeout=10", peerWGIP, port, user, password)
+	
+	// Alter system to write primary_conninfo to postgresql.auto.conf
+	_, err := c.postgres.Exec(ctx, "ALTER SYSTEM SET primary_conninfo = $1", connInfo)
+	if err != nil {
+		return fmt.Errorf("failed to configure replication upstream via ALTER SYSTEM: %w", err)
+	}
+	
+	// Reload configuration (so it picks up primary_conninfo)
+	_, err = c.postgres.Exec(ctx, "SELECT pg_reload_conf()")
+	if err != nil {
+		c.log.Warn("failed to reload configuration", "error", err)
+	}
+	return nil
 }

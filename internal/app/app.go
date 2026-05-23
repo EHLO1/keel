@@ -93,10 +93,10 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 
 	// Filesystem Client - Initialize Paths and Files
-	mm := filesystem.NewMaintenanceFlag(cfg.MaintenanceFlagPath, cfg.MaintenanceFlagFile)
+	mm := filesystem.NewMaintenanceFlag(cfg.MaintenanceFlagPath, cfg.MaintenanceFlagFile, logger.With("component", "fsMaintenanceFlag"))
 	ss := filesystem.NewStandbySignal(cfg.StandbySignalFile)
 	vr := filesystem.NewVRRPRole(cfg.VRRPRolePath, cfg.VRRPRoleFile)
-	sf := filesystem.NewStateFile(cfg.StateFilePath, cfg.StateFile)
+	sf := filesystem.NewStateFile(cfg.StateFilePath, cfg.StateFile, logger.With("component", "fsStateFile"))
 
 	// Preflight Checks
 	// preflight := preflightChecks(appCtx, cfg, appServices)

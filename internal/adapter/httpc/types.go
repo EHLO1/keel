@@ -11,6 +11,6 @@ type PeerState struct {
 	OwnsVIP                 bool      `json:"owns_vip"`
 	PostgresInStandby       bool      `json:"postgres_in_standby"`
 	MaintenanceMode         bool      `json:"maintenance_mode"`
-	NodeRole                string    `json:"node_role"`
+	LocalState              string    `json:"local_state"`
 	LoadBalancerIsReachable bool      `json:"load_balancer_is_reachable"`
 }

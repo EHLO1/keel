@@ -44,15 +44,15 @@ type Config struct {
 	WireguardInterface string `env:"WIREGUARD_INTERFACE" default:"wg0"`
 
 	// ── Files ──────────────────────────────────────────────────────────
-	// File to enable maintenance mode.
+	// File created by Keel, used to restrict orchestration decisions and actions.
 	MaintenanceFlagPath string `env:"MAINTENANCE_FLAG_PATH" default:"/var/keel"`
 	MaintenanceFlagFile string `env:"MAINTENANCE_FLAG_FILE" default:"maintenance_mode"`
-	// File used by Postgres to keep it from restarting as primary.
+	// File created by Postgres, used to keep Postgres from starting as primary.
 	StandbySignalFile string `env:"STANDBY_SIGNAL_FILE" default:"standby.signal"`
-	// File the keepalived notify_* scripts write the current VRRP state to.
+	// File created by Keepalived, used by the notify_* scripts advertise the current local VRRP state.
 	VRRPRolePath string `env:"VRRP_ROLE_PATH" default:"/run/vrrp"`
 	VRRPRoleFile string `env:"VRRP_ROLE_FILE" default:"role"`
-	// File the track_script reads to gate the +50 weight.
+	// File created by Keel, used to advertise local state to peers and the local Keepalived daemon.
 	StateFilePath string `env:"STATE_FILE_PATH" default:"/run/keel"`
 	StateFile     string `env:"STATE_FILE" default:"state"`
 
@@ -70,8 +70,6 @@ type Config struct {
 	LogLevel string `env:"LOG_LEVEL" default:"info" options:"toLower"`
 	LogJSON  bool   `env:"LOG_JSON" default:"true"`
 }
-
-// TODO Init WireGuard first to get the peer IP lists for postgres and vakey
 
 func Load(envPath string) (*Config, error) {
 	if envPath != "" {

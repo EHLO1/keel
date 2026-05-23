@@ -17,6 +17,7 @@ const (
 	LocalPrimary   LocalState = "PRIMARY"
 	LocalStandby   LocalState = "STANDBY"
 	LocalUnhealthy LocalState = "UNHEALTHY"
+	LocalUnknown   LocalState = "UNKNOWN"
 
 	Healthy   Health = "healthy"
 	Unhealthy Health = "unhealthy"

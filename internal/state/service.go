@@ -169,9 +169,18 @@ func (s *Service) Capture(parentCtx context.Context, log *slog.Logger) *Snapshot
 	wg.Go(func() {
 		stf, err := s.sf.Observe()
 		if err != nil {
-			assign(func() { snap.LocalState = stf })
+			assign(func() { snap.LocalState = LocalUnknown })
 		}
-		assign(func() { snap.MaintenanceMode = m })
+		assign(func() {
+			switch stf {
+			case "PRIMARY":
+				snap.LocalState = LocalPrimary
+			case "STANDBY":
+				snap.LocalState = LocalStandby
+			default:
+				snap.LocalState = LocalUnhealthy
+			}
+		})
 	})
 
 	wg.Go(func() {

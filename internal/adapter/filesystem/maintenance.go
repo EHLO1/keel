@@ -4,18 +4,28 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
 
 type MaintenanceFlag struct {
 	file string
+	log  *slog.Logger
 }
 
-func NewMaintenanceFlag(path string, fileName string) *MaintenanceFlag {
-	return &MaintenanceFlag{
+func NewMaintenanceFlag(path string, fileName string, log *slog.Logger) *MaintenanceFlag {
+	mf := &MaintenanceFlag{
 		file: filepath.Join(path, fileName),
+		log:  log,
 	}
+
+	if err := mkdirWithPerms(path); err != nil {
+		log.Error("failed to create directory", "error", err)
+		return mf
+	}
+
+	return mf
 }
 
 var ErrAlreadyEnabled = errors.New("maintenance mode is already enabled")

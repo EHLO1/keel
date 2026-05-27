@@ -1,9 +1,16 @@
 package policy
 
-type qualifier bool
+import (
+	"github.com/EHLO1/keel/internal/adapter/systemd"
+	"github.com/EHLO1/keel/internal/state"
+)
 
-const ()
+func systemdServiceCheck(snap *state.Snapshot) (bool, error) {
+	wgSvc := &snap.Systemd.Services[].Name
+	
+}
 
-type criteria struct {
-	MaintenanceMode qualifier
+func meetsBaseQualifiers(snap *state.Snapshot) bool {
+	if !snap.MaintenanceMode &&
+		!snap.Systemd.Services
 }

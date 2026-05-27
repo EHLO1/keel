@@ -7,11 +7,40 @@ import (
 )
 
 type Evaluator struct {
-	log *slog.Logger
+	log            *slog.Logger
+	bootstrapCheck bool
 }
 
 func NewEvaluator(log *slog.Logger) (*Evaluator, error) {
-	return &Evaluator{log: log}, nil
+	bootstrapCheck := true
+	return &Evaluator{
+		log:            log,
+		bootstrapCheck: bootstrapCheck,
+	}, nil
+}
+
+func (e *Evaluator) Qualify(snap *state.Snapshot) string {
+	var r string
+
+	switch {
+	case !meetsBaseQualifiers():
+		r = "demote"
+	case e.bootstrapCheck:
+		if fitForPrimary("bootstrap") {
+			e.bootstrapCheck = false
+			r = "promoteToPrimary"
+		}
+		e.bootstrapCheck = false
+		break
+	case fitForStandby():
+		r = "promoteToStandby"
+	case fitForPrimary("standby"):
+		r = "promoteToPrimary"
+	default:
+		r = ""
+	}
+
+	return r
 }
 
 func (e *Evaluator) Evaluate(snapshot *state.Snapshot) *DesiredState {

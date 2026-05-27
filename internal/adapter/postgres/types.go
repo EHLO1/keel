@@ -25,7 +25,8 @@ type PostgresState struct {
 	ReceiveLSN         string `json:"receive_lsn,omitempty"`          // pg_last_wal_receive_lsn()
 	ReplayLSN          string `json:"replay_lsn,omitempty"`           // pg_last_wal_replay_lsn()
 	LagBytes           int64  `json:"lag_bytes,omitempty"`            // pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS lag_bytes
-	LagKnown           bool   `json:"lag_known"`
+	LagKnown           bool   `json:"lag_known,omitempty"`
+	ReceiverStatus     string `json:"receiver_status,omitempty"`
 	StreamingActive    bool   `json:"streaming_active,omitempty"` // pg_stat_wal_receiver row exists
 }
 

@@ -6,7 +6,7 @@ type Role string
 
 const (
 	RoleUnknown Role = ""
-	RoleMaster  Role = "master"
+	RolePrimary Role = "primary"
 	RoleReplica Role = "replica"
 )
 

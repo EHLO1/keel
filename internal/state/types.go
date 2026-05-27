@@ -39,7 +39,6 @@ type Snapshot struct {
 	PeerKeelInstances []PeerKeelInstance       `json:"peer_keel_instances"`
 
 	// Derived or Aggregated
-	PeerDownStrikes         int    `json:"peer_down_strikes"`
 	WireGuardTunnelState    Health `json:"wireguard_tunnel_state"`
 	LoadBalancerIsReachable bool   `json:"load_balancer_is_reachable"` // icmp
 }
@@ -47,6 +46,7 @@ type Snapshot struct {
 type PeerKeelInstance struct {
 	WireguardIP           string          `json:"wireguard_ip"`
 	RealIP                string          `json:"real_ip"`
+	PeerDownStrikes       int             `json:"peer_down_strikes"`
 	PingableOverWireguard bool            `json:"pingable_over_wireguard"`
 	PingableOverReal      bool            `json:"pingable_over_real"`
 	APISnapshot           httpc.PeerState `json:"api_snapshot"`

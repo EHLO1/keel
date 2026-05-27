@@ -39,12 +39,13 @@ func (c *Client) Observe(ctx context.Context) ValkeyState {
 
 	state.Reachable = true
 	role, _ := infoData["role"]
-	state.Role = role
 
 	switch role {
-	case "master":
+	case "master", "primary":
+		state.Role = string(RolePrimary)
 		c.observeCommon(&state, infoData)
 	case "replica", "slave":
+		state.Role = string(RoleReplica)
 		c.observeCommon(&state, infoData)
 		c.observeReplica(&state, infoData)
 	}

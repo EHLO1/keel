@@ -79,6 +79,10 @@ func (c *Client) observeReplica(ctx context.Context, state *PostgresState) {
                 ),
                 -1
             ),
+			COALESCE(
+				(SELECT status::text FROM pg_stat_wal_receiver),
+				'unknown'
+			),
             EXISTS (SELECT 1 FROM pg_stat_wal_receiver)
     `
 
@@ -88,6 +92,7 @@ func (c *Client) observeReplica(ctx context.Context, state *PostgresState) {
 		&state.ReplayLSN,
 		&state.UpstreamPrimaryLSN,
 		&lagBytes,
+		&state.ReceiverStatus,
 		&state.StreamingActive,
 	)
 	if err != nil {
@@ -186,13 +191,13 @@ func (c *Client) Demote(ctx context.Context, peerWGIP string, port int, user, pa
 	c.log.Info("demoting postgres primary to standby", "upstream_peer", peerWGIP)
 	// Build connection string to upstream primary
 	connInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=prefer connect_timeout=10", peerWGIP, port, user, password)
-	
+
 	// Alter system to write primary_conninfo to postgresql.auto.conf
 	_, err := c.postgres.Exec(ctx, "ALTER SYSTEM SET primary_conninfo = $1", connInfo)
 	if err != nil {
 		return fmt.Errorf("failed to configure replication upstream via ALTER SYSTEM: %w", err)
 	}
-	
+
 	// Reload configuration (so it picks up primary_conninfo)
 	_, err = c.postgres.Exec(ctx, "SELECT pg_reload_conf()")
 	if err != nil {

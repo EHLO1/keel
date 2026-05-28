@@ -119,27 +119,29 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	// return nil
 
 	// Initialize State Service (Snapshots)
+	systemdServiceList := []string{"docker.service", "keepalived.service", "wireguard.service"}
 	st, err := state.NewService(state.Dependencies{
-		PG:  pg,
-		VK:  vk,
-		WRG: wrg,
-		HC:  hc,
-		DR:  dr,
-		IC:  ic,
-		NW:  nw,
-		Sys: sys,
-		MM:  mm,
-		SS:  ss,
-		VR:  vr,
-		SF:  sf,
-		Log: logger.With("component", "stateService"),
+		PG:      pg,
+		VK:      vk,
+		WRG:     wrg,
+		HC:      hc,
+		DR:      dr,
+		IC:      ic,
+		NW:      nw,
+		Sys:     sys,
+		MM:      mm,
+		SS:      ss,
+		VR:      vr,
+		SF:      sf,
+		SvcList: systemdServiceList,
+		Log:     logger.With("component", "stateService"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize state service: %w", err)
 	}
 
 	// Initialize Policy & Actor Services
-	pol, err := policy.NewEvaluator(logger.With("component", "policyEvaluator"))
+	pol, err := policy.NewEvaluator(systemdServiceList, logger.With("component", "policyEvaluator"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize policy evaluator service: %w", err)
 	}

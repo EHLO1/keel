@@ -7,13 +7,15 @@ import (
 )
 
 type Evaluator struct {
+	svcList        []string
 	log            *slog.Logger
 	bootstrapCheck bool
 }
 
-func NewEvaluator(log *slog.Logger) (*Evaluator, error) {
+func NewEvaluator(svcList []string, log *slog.Logger) (*Evaluator, error) {
 	bootstrapCheck := true
 	return &Evaluator{
+		svcList:        svcList,
 		log:            log,
 		bootstrapCheck: bootstrapCheck,
 	}, nil
@@ -23,7 +25,7 @@ func (e *Evaluator) Qualify(snap *state.Snapshot) string {
 	var r string
 
 	switch {
-	case !meetsBaseQualifiers():
+	case !meetsBaseQualifiers(snap):
 		r = "demote"
 	case e.bootstrapCheck:
 		if fitForPrimary("bootstrap") {

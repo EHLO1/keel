@@ -20,55 +20,58 @@ import (
 )
 
 type Dependencies struct {
-	PG  *postgres.Client
-	VK  *valkey.Client
-	WRG *wireguard.Client
-	HC  *httpc.Client
-	DR  *docker.Client
-	IC  *icmp.Client
-	NW  network.Client
-	Sys systemd.Client
-	MM  *filesystem.MaintenanceFlag
-	SS  *filesystem.StandbySignal
-	VR  *filesystem.VRRPRole
-	SF  *filesystem.StateFile
-	Log *slog.Logger
+	PG      *postgres.Client
+	VK      *valkey.Client
+	WRG     *wireguard.Client
+	HC      *httpc.Client
+	DR      *docker.Client
+	IC      *icmp.Client
+	NW      network.Client
+	Sys     systemd.Client
+	MM      *filesystem.MaintenanceFlag
+	SS      *filesystem.StandbySignal
+	VR      *filesystem.VRRPRole
+	SF      *filesystem.StateFile
+	SvcList []string
+	Log     *slog.Logger
 }
 
 type Service struct {
 	current atomic.Pointer[Snapshot]
 
 	// Clients
-	pg  *postgres.Client
-	vk  *valkey.Client
-	wrg *wireguard.Client
-	hc  *httpc.Client
-	dr  *docker.Client
-	ic  *icmp.Client
-	nw  network.Client
-	sys systemd.Client
-	mm  *filesystem.MaintenanceFlag
-	ss  *filesystem.StandbySignal
-	vr  *filesystem.VRRPRole
-	sf  *filesystem.StateFile
-	log *slog.Logger
+	pg      *postgres.Client
+	vk      *valkey.Client
+	wrg     *wireguard.Client
+	hc      *httpc.Client
+	dr      *docker.Client
+	ic      *icmp.Client
+	nw      network.Client
+	sys     systemd.Client
+	mm      *filesystem.MaintenanceFlag
+	ss      *filesystem.StandbySignal
+	vr      *filesystem.VRRPRole
+	sf      *filesystem.StateFile
+	svcList []string
+	log     *slog.Logger
 }
 
 func NewService(deps Dependencies) (*Service, error) {
 	s := &Service{
-		pg:  deps.PG,
-		vk:  deps.VK,
-		wrg: deps.WRG,
-		hc:  deps.HC,
-		dr:  deps.DR,
-		ic:  deps.IC,
-		nw:  deps.NW,
-		sys: deps.Sys,
-		mm:  deps.MM,
-		ss:  deps.SS,
-		vr:  deps.VR,
-		sf:  deps.SF,
-		log: deps.Log,
+		pg:      deps.PG,
+		vk:      deps.VK,
+		wrg:     deps.WRG,
+		hc:      deps.HC,
+		dr:      deps.DR,
+		ic:      deps.IC,
+		nw:      deps.NW,
+		sys:     deps.Sys,
+		mm:      deps.MM,
+		ss:      deps.SS,
+		vr:      deps.VR,
+		sf:      deps.SF,
+		svcList: deps.SvcList,
+		log:     deps.Log,
 	}
 
 	// Initialize atomic pointer with an empty snapshot
@@ -110,7 +113,7 @@ func (s *Service) Capture(parentCtx context.Context, log *slog.Logger) *Snapshot
 	}
 
 	wg.Go(func() {
-		ss := s.sys.Observe(ctx, []string{"docker.service", "keepalived.service", "wireguard.service"})
+		ss := s.sys.Observe(ctx, s.svcList)
 		assign(func() { snap.Systemd = ss })
 	})
 

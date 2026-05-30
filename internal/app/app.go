@@ -141,7 +141,7 @@ func Initialize(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 
 	// Initialize Policy & Actor Services
-	pol, err := policy.NewEvaluator(systemdServiceList, logger.With("component", "policyEvaluator"))
+	pol, err := policy.NewEvaluator(logger.With("component", "policyEvaluator"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize policy evaluator service: %w", err)
 	}

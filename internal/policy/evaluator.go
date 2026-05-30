@@ -7,17 +7,12 @@ import (
 )
 
 type Evaluator struct {
-	svcList        []string
-	log            *slog.Logger
-	bootstrapCheck bool
+	log *slog.Logger
 }
 
-func NewEvaluator(svcList []string, log *slog.Logger) (*Evaluator, error) {
-	bootstrapCheck := true
+func NewEvaluator(log *slog.Logger) (*Evaluator, error) {
 	return &Evaluator{
-		svcList:        svcList,
-		log:            log,
-		bootstrapCheck: bootstrapCheck,
+		log: log,
 	}, nil
 }
 
@@ -25,19 +20,12 @@ func (e *Evaluator) Qualify(snap *state.Snapshot) string {
 	var r string
 
 	switch {
-	case !meetsBaseQualifiers(snap):
+	case !meetsBaseQualifiers(snap).OK:
 		r = "demote"
-	case e.bootstrapCheck:
-		if fitForPrimary("bootstrap") {
-			e.bootstrapCheck = false
-			r = "promoteToPrimary"
-		}
-		e.bootstrapCheck = false
-		break
-	case fitForStandby():
-		r = "promoteToStandby"
-	case fitForPrimary("standby"):
+	case fitForPrimary(snap).OK:
 		r = "promoteToPrimary"
+	case fitForStandby(snap).OK:
+		r = "promoteToStandby"
 	default:
 		r = ""
 	}
@@ -58,24 +46,18 @@ func (e *Evaluator) Evaluate(snapshot *state.Snapshot) *DesiredState {
 	if snapshot.OwnsVIP || snapshot.VRRPRole == "MASTER" {
 		return &DesiredState{
 			Postgres:  PostgresPrimary,
-			Valkey:    ValkeyMaster,
+			Valkey:    ValkeyPrimary,
 			Rationale: "Active node (owns VIP or VRRP role is MASTER)",
 		}
 	}
 
-	// Standby node
-	var valkeyReplOf *HostPort
-	if e.peerWGIP != "" {
-		valkeyReplOf = &HostPort{
-			Host: e.peerWGIP,
-			Port: e.valkeyPort,
-		}
-	}
+	// Temp placeholder
+	vof := &HostPort{"", 6379}
 
 	return &DesiredState{
 		Postgres:        PostgresReplica,
 		Valkey:          ValkeyReplica,
-		ValkeyReplicaOf: valkeyReplOf,
+		ValkeyReplicaOf: vof,
 		Rationale:       "Standby node (does not own VIP, VRRP role is " + snapshot.VRRPRole + ")",
 	}
 }

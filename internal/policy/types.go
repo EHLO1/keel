@@ -1,5 +1,10 @@
 package policy
 
+type Verdict struct {
+	OK     bool
+	Reason string
+}
+
 type PostgresRole string
 type ValkeyRole string
 
@@ -8,7 +13,7 @@ const (
 	PostgresReplica PostgresRole = "replica"
 	PostgresUnknown PostgresRole = "unknown"
 
-	ValkeyMaster  ValkeyRole = "master"
+	ValkeyPrimary ValkeyRole = "primary"
 	ValkeyReplica ValkeyRole = "replica"
 	ValkeyUnknown ValkeyRole = "unknown"
 )

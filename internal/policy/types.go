@@ -16,6 +16,8 @@ const (
 	ValkeyPrimary ValkeyRole = "primary"
 	ValkeyReplica ValkeyRole = "replica"
 	ValkeyUnknown ValkeyRole = "unknown"
+
+	PostgresLagTheshold int = 100
 )
 
 type HostPort struct {

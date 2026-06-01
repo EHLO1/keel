@@ -27,7 +27,7 @@ type Snapshot struct {
 	// Measured or Requested
 	CapturedAt        time.Time                `json:"captured_at"`
 	Hostname          string                   `json:"hostname"`
-	LocalState        LocalState               `json:"local_state"`
+	Role              string                   `json:"role"`
 	VRRPRole          string                   `json:"vrrp_role"`           // filesystem
 	OwnsVIP           bool                     `json:"owns_vip"`            // network
 	Postgres          postgres.PostgresState   `json:"postgres"`            // postgres

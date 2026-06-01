@@ -2,25 +2,41 @@ package policy
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/EHLO1/keel/internal/state"
 )
 
 type Evaluator struct {
-	log *slog.Logger
+	debouncer map[Qualifier]*debouncer
+	log       *slog.Logger
 }
 
 func NewEvaluator(log *slog.Logger) (*Evaluator, error) {
 	return &Evaluator{
-		log: log,
+		debouncer: map[Qualifier]*deboucer,
+		log:       log,
 	}, nil
+}
+
+type HostPort struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+type DesiredState struct {
+	Postgres        Role      `json:"postgres"`
+	Valkey          Role      `json:"valkey"`
+	ValkeyReplicaOf *HostPort `json:"valkey_replica_of,omitempty"`
+	StateFile       string    `json:"state_file,omitempty"`
+	Rationale       string    `json:"rationale"`
 }
 
 func (e *Evaluator) Qualify(snap *state.Snapshot) string {
 	var r string
 
 	switch {
-	case !meetsBaseQualifiers(snap).OK:
+	case !baseQualifiers(snap).OK:
 		r = "demote"
 	case fitForPrimary(snap).OK:
 		r = "promoteToPrimary"
@@ -33,22 +49,11 @@ func (e *Evaluator) Qualify(snap *state.Snapshot) string {
 	return r
 }
 
-func (e *Evaluator) Evaluate(snapshot *state.Snapshot) *DesiredState {
-	if snapshot.MaintenanceMode {
-		return &DesiredState{
-			Postgres:  PostgresUnknown,
-			Valkey:    ValkeyUnknown,
-			Rationale: "Maintenance mode is enabled",
-		}
-	}
+func (e *Evaluator) Evaluate(snap *state.Snapshot) *DesiredState {
+	now := time.Now()
 
-	// Active node: owns VRRP VIP or VRRP state is MASTER
-	if snapshot.OwnsVIP || snapshot.VRRPRole == "MASTER" {
-		return &DesiredState{
-			Postgres:  PostgresPrimary,
-			Valkey:    ValkeyPrimary,
-			Rationale: "Active node (owns VIP or VRRP role is MASTER)",
-		}
+	if bfq := e.baseFitnessQualifier(snap, Role, now); !bfq.OK {
+		return nil
 	}
 
 	// Temp placeholder
@@ -58,6 +63,24 @@ func (e *Evaluator) Evaluate(snapshot *state.Snapshot) *DesiredState {
 		Postgres:        PostgresReplica,
 		Valkey:          ValkeyReplica,
 		ValkeyReplicaOf: vof,
-		Rationale:       "Standby node (does not own VIP, VRRP role is " + snapshot.VRRPRole + ")",
+		Rationale:       "Standby node (does not own VIP, VRRP role is " + snap.VRRPRole + ")",
 	}
+}
+
+func (e *Evaluator) baseFitnessQualifier(snap *state.Snapshot, role Role, now time.Time) Verdict {
+	if snap.MaintenanceMode {
+		return Verdict{false, "maintenance mode active"}
+	}
+
+	order := []Qualifier{QSystemd, QPostgres, QValkey, QVRRP, QLoadBalancer}
+	for _, q := range order {
+		raw := baseFitness(q, snap)
+
+		confirmed := e.debouncer[q].observe(raw, now, gracePeriod(q, role))
+
+		if !confirmed.OK {
+			return confirmed
+		}
+	}
+	return Verdict{OK: true}
 }

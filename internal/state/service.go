@@ -31,7 +31,6 @@ type Dependencies struct {
 	MM      *filesystem.MaintenanceFlag
 	SS      *filesystem.StandbySignal
 	VR      *filesystem.VRRPRole
-	SF      *filesystem.StateFile
 	SvcList []string
 	Log     *slog.Logger
 }
@@ -51,7 +50,6 @@ type Service struct {
 	mm      *filesystem.MaintenanceFlag
 	ss      *filesystem.StandbySignal
 	vr      *filesystem.VRRPRole
-	sf      *filesystem.StateFile
 	svcList []string
 	log     *slog.Logger
 }
@@ -69,7 +67,6 @@ func NewService(deps Dependencies) (*Service, error) {
 		mm:      deps.MM,
 		ss:      deps.SS,
 		vr:      deps.VR,
-		sf:      deps.SF,
 		svcList: deps.SvcList,
 		log:     deps.Log,
 	}
@@ -167,23 +164,6 @@ func (s *Service) Capture(parentCtx context.Context, log *slog.Logger) *Snapshot
 			assign(func() { snap.VRRPRole = "UNKNOWN" })
 		}
 		assign(func() { snap.VRRPRole = r })
-	})
-
-	wg.Go(func() {
-		stf, err := s.sf.Observe()
-		if err != nil {
-			assign(func() { snap.LocalState = LocalUnknown })
-		}
-		assign(func() {
-			switch stf {
-			case "PRIMARY":
-				snap.LocalState = LocalPrimary
-			case "STANDBY":
-				snap.LocalState = LocalStandby
-			default:
-				snap.LocalState = LocalUnhealthy
-			}
-		})
 	})
 
 	wg.Go(func() {

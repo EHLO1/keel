@@ -33,6 +33,7 @@ type Config struct {
 	PostgresHost       string `env:"POSTGRES_HOST" default:"localhost"`
 	PostgresPort       int    `env:"POSTGRES_PORT" default:"5432"`
 	PostgresVolumeName string `env:"POSTGRES_VOLUME_NAME" default:"postgres.data"`
+	PostgresLagMaximum int    `env:"POSTGRES_LAG_MAXIMUM" default:"100"` // in MB
 
 	// ── Valkey ───────────────────────────────────────────────────────────────
 	ValkeyDB       int    `env:"VALKEY_DB" default:"0"`
@@ -380,6 +381,18 @@ func (c *Config) ValkeyAddress() string {
 		Host: c.ValkeyHost + ":" + strconv.Itoa(c.ValkeyPort),
 	}
 	return u.String()
+}
+
+func (c *Config) PostgresLagThreshold() int64 {
+	if c.PostgresLagMaximum > 500 {
+		fmt.Printf("Lag Maximum for Postgres is greater than 500 MB, setting to hard limit of 500 MB")
+		return int64(500000000)
+	}
+	if c.PostgresLagMaximum < 10 {
+		fmt.Printf("Lag Maximum for Postgres is less than 10 MB, setting to default of 100 MB")
+		return int64(100000000)
+	}
+	return int64(c.PostgresLagMaximum * 1000000)
 }
 
 // ListenAddr returns the effective address for the HTTP server to bind to.

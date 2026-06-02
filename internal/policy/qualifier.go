@@ -92,44 +92,12 @@ func baseFitness(q Qualifier, snap *state.Snapshot) Verdict {
 	}
 }
 
-func fitForPrimary(snap *state.Snapshot) Verdict {
-	if !snap.OwnsVIP && snap.VRRPRole != "MASTER" {
-		return Verdict{false, "not assigned the vrrp vip"}
-	}
-	if snap.Postgres.Role != string(PostgresPrimary) {
-		return Verdict{false, "postgres role is not primary"}
-	}
-	if snap.Valkey.Role != string(ValkeyPrimary) {
-		return Verdict{false, "valkey role is not primary"}
-	}
-	return Verdict{true, ""}
-}
-
-// Standby needs to be all about replication health. A healthy standby must have healthy replication.
-// A healthy standby with healthy replication has an active primary. If it doesn't have an active primary,
-// then the healthy standby may potentially become the new primary.
-func fitForStandby(snap *state.Snapshot) Verdict {
-	if snap.Postgres.Role != string(PostgresReplica) {
-		return Verdict{false, "postgres role is not replica"}
-	}
-	if v := pgReplicationHealthy(snap); !v.OK {
-		return v
-	}
-	if snap.Valkey.Role != string(ValkeyReplica) {
-		return Verdict{false, "valkey role is not replica"}
-	}
-	if v := vkReplicationHealthy(snap); !v.OK {
-		return v
-	}
-	return Verdict{true, ""}
-}
-
-func pgReplicationHealthy(snap *state.Snapshot) Verdict {
+func pgReplicationHealthy(snap *state.Snapshot, pgLagThreshold int64) Verdict {
 	switch snap.Postgres.Role {
-	case string(PostgresPrimary):
+	case "primary":
 		repOK := 0
 		for _, r := range snap.Postgres.Replicas {
-			if r.LagKnown && r.LagBytes < int64(PostgresLagTheshold) {
+			if r.LagKnown && r.LagBytes < pgLagThreshold {
 				repOK++
 			}
 			if !r.LagKnown && r.State == "streaming" {
@@ -141,11 +109,11 @@ func pgReplicationHealthy(snap *state.Snapshot) Verdict {
 		}
 		return Verdict{false, "no suitable replica available"}
 
-	case string(PostgresReplica):
+	case "replica":
 		if !snap.Postgres.StreamingActive {
 			return Verdict{false, "no active connection to primary"}
 		}
-		if snap.Postgres.LagKnown && snap.Postgres.LagBytes > int64(PostgresLagTheshold) {
+		if snap.Postgres.LagKnown && snap.Postgres.LagBytes > pgLagThreshold {
 			return Verdict{false, "replication lag exceeds threshold of 100MB"}
 		}
 		return Verdict{true, ""}

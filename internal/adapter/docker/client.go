@@ -1,12 +1,18 @@
 package docker
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
 
 	"github.com/docker/go-sdk/client"
+	"github.com/docker/go-sdk/container"
+	"github.com/docker/go-sdk/container/wait"
 	"github.com/docker/go-sdk/volume"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	mobyapi "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
 	mobyclient "github.com/moby/moby/client"
 )
 
@@ -83,4 +89,50 @@ func (c *Client) RestartPostgresContainer(ctx context.Context) error {
 		return fmt.Errorf("failed to restart container %s: %w", targetID, err)
 	}
 	return nil
+}
+
+func (c *Client) ReadPGControl(ctx context.Context, pgImage string, pgVersion string) (string, error) {
+	ctr, err := container.Run(
+		ctx,
+		container.WithClient(c.docker),
+		container.WithImage(pgImage+":"+pgVersion),
+		container.WithEntrypoint("pg_controldata"),
+		container.WithEntrypointArgs("-D", "/var/lib/postgresql/data"),
+		container.WithHostConfigModifier(func(hostConfig *mobyapi.HostConfig) {
+			hostConfig.Mounts = []mount.Mount{
+				{
+					Type:     mount.TypeVolume,
+					Source:   c.pgVolName,
+					Target:   "/var/lib/postgresql/data",
+					ReadOnly: true,
+				},
+			}
+		}),
+
+		container.WithWaitStrategy(wait.ForExit()),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to run pg_controldata container: %w", err)
+	}
+
+	defer func() {
+		_ = ctr.Terminate(context.Background())
+	}()
+
+	logReader, err := ctr.Logs(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get container logs: %w", err)
+	}
+	defer logReader.Close()
+
+	var stdoutBuffer, stderrBuffer bytes.Buffer
+	if _, err := stdcopy.StdCopy(&stdoutBuffer, &stderrBuffer, logReader); err != nil {
+		return "", fmt.Errorf("failed to read logs: %w", err)
+	}
+
+	if stderrBuffer.Len() > 0 {
+		return "", fmt.Errorf("pg_controldata error: %s", stderrBuffer.String())
+	}
+
+	return stdoutBuffer.String(), nil
 }

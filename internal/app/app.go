@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/EHLO1/keel/internal/actor"
 	"github.com/EHLO1/keel/internal/adapter/docker"
@@ -238,3 +239,15 @@ func (a *App) Run(ctx context.Context) error {
 
 // 	return pre
 // }
+
+func previouslyPrimary(pgControlData string) (bool, error) {
+	for _, line := range strings.Split(string(pgControlData), "\n") {
+		if v, ok := strings.CutPrefix(line, "Database cluster state:"); ok {
+			if strings.TrimSpace(v) == "in production" || strings.TrimSpace(v) == "shut down" {
+				return true, nil
+			}
+			return false, nil
+		}
+	}
+	return false, fmt.Errorf("cluster state line not found")
+}
